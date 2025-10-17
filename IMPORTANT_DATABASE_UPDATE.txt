@@ -1,0 +1,138 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                ⚠️  IMPORTANT: DATABASE UPDATE REQUIRED ⚠️                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+🔴 ACTION REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before using the new Quick Notes features, you MUST add a 'title' column
+to your admin_notes table in Supabase.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 STEP-BY-STEP INSTRUCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Open Supabase Dashboard
+   → Go to: https://grjaqvdoxqendrzzgyjk.supabase.co
+
+2. Navigate to SQL Editor
+   → Click "SQL Editor" in the left sidebar
+
+3. Run the Migration Script
+   → Copy and paste the SQL below
+   → Click "Run" button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💾 SQL MIGRATION SCRIPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- Add title column to admin_notes table
+ALTER TABLE admin_notes 
+ADD COLUMN IF NOT EXISTS title TEXT DEFAULT 'Untitled Note';
+
+-- Update any existing notes to have a title extracted from the first line
+UPDATE admin_notes 
+SET title = COALESCE(
+  SUBSTRING(notes FROM 1 FOR 50),
+  'Untitled Note'
+)
+WHERE title IS NULL OR title = '';
+
+-- Create an index on the title column for faster searches
+CREATE INDEX IF NOT EXISTS idx_admin_notes_title ON admin_notes(title);
+
+-- Add a comment to the column
+COMMENT ON COLUMN admin_notes.title IS 'Title of the note for easy identification';
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ VERIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After running the script, verify the column was added:
+
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_name = 'admin_notes' AND column_name = 'title';
+
+Expected result:
+┌─────────────┬───────────┬─────────────────┐
+│ column_name │ data_type │ column_default  │
+├─────────────┼───────────┼─────────────────┤
+│ title       │ text      │ 'Untitled Note' │
+└─────────────┴───────────┴─────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 UPDATED TABLE SCHEMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Before:
+───────
+admin_notes {
+  id: bigint (primary key)
+  page_key: text (unique)
+  notes: text
+  updated_at: timestamptz
+}
+
+After:
+──────
+admin_notes {
+  id: bigint (primary key)
+  page_key: text (unique)
+  title: text            ← NEW COLUMN
+  notes: text
+  updated_at: timestamptz
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  WHAT HAPPENS IF YOU DON'T RUN THIS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If you don't add the 'title' column:
+❌ Creating new notes will fail
+❌ Editing notes will fail
+❌ Database INSERT/UPDATE operations will error
+❌ Console will show errors about missing 'title' column
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ AFTER RUNNING THE MIGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ All existing notes will have a title (first 50 chars)
+✅ New notes can be created with custom titles
+✅ Notes can be edited and updated
+✅ Everything works perfectly!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 MIGRATION FILE LOCATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The SQL script is also saved in:
+📄 crm8/DATABASE_UPDATE_NOTES_TITLE.sql
+
+You can open this file and copy the SQL from there too.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 QUICK CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+□ Open Supabase Dashboard
+□ Navigate to SQL Editor
+□ Copy the SQL migration script
+□ Run the script
+□ Verify the 'title' column exists
+□ Test creating a new note
+□ Done! ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is a one-time update. Once done, you never need to run it again!
+
