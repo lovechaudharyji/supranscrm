@@ -8,55 +8,57 @@ import {
   ActivityIcon,
   CalendarCheckIcon,
 } from "lucide-react";
-
-// --- AIRTABLE CONFIGURATION ---
-const CONFIG = {
-  API_KEY: process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || "",
-  BASE_ID: process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || "",
-  LEADS_TABLE_NAME: "Leads",
-  COLUMN_MAP: {
-    stage: "Stage",
-    dealAmount: "Deal Amount",
-    createdAt: "date_and_time",
-    followUpDay: "Follow Up day",
-  },
-};
+import { supabase } from "@/lib/supabaseClient";
 
 // --- TYPE DEFINITIONS ---
-interface AirtableRecord {
-  id: string;
-  fields: { [key: string]: any };
-}
 interface Lead {
-  id: string;
-  [key: string]: any;
+  whalesync_postgres_id: string;
+  name: string;
+  stage: string;
+  deal_amount: number;
+  date_and_time: string;
+  assigned_to: string;
+  email: string;
+  mobile: string;
+  city: string;
+  source: string;
+  client_budget: number;
+  current_business_turnover: string;
+  services: string;
+  interested_in_products: string[];
+  follow_up_date: string;
+  call_remark: string;
+  call_notes: string;
+  employee_name: string;
+  lead_tag: string;
+  assignment_status: string;
+  today_s_lead: string;
+  whatsapp_link: string;
+  profile_photo: string;
+  age: number;
+  any_other_interests: string;
+  expected_closing: string;
+  follow_up_day: string;
+  last_callback_date: string;
+  official_email: string;
+  official_number: string;
+  stage1: string;
+  email_button: string;
+  calls: string;
 }
 
-// --- API HELPER FUNCTION ---
-const fetchTableData = async <T extends { id: string }>(
-  tableName: string
-): Promise<T[]> => {
-  let allRecords: AirtableRecord[] = [];
-  let offset: string | null = null;
-  const url = `https://api.airtable.com/v0/${CONFIG.BASE_ID}/${encodeURIComponent(tableName)}`;
+// --- SUPABASE HELPER FUNCTION ---
+const fetchLeadsData = async (): Promise<Lead[]> => {
+  const { data, error } = await supabase
+    .from('Leads')
+    .select('*')
+    .order('date_and_time', { ascending: false });
 
-  do {
-    const response = await fetch(`${url}${offset ? `?offset=${offset}` : ""}`, {
-      headers: { Authorization: `Bearer ${CONFIG.API_KEY}` },
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(
-        `API Error for ${tableName}: ${error.error?.message || "Unknown error"}`
-      );
-    }
-    const page = await response.json();
-    allRecords.push(...page.records);
-    offset = page.offset;
-  } while (offset);
+  if (error) {
+    throw new Error(`Supabase Error: ${error.message}`);
+  }
 
-  return allRecords.map((r) => ({ ...r.fields, id: r.id })) as T[];
+  return data || [];
 };
 
 // --- HELPER COMPONENTS ---
@@ -105,7 +107,7 @@ export default function LeadCards() {
     setLoading(true);
     setError(null);
     try {
-      const leadsData = await fetchTableData<Lead>(CONFIG.LEADS_TABLE_NAME);
+      const leadsData = await fetchLeadsData();
       setLeads(leadsData);
     } catch (err: any) {
       setError(err);
@@ -119,24 +121,23 @@ export default function LeadCards() {
   }, [fetchKpiData]);
 
   const kpiData = useMemo(() => {
-    const C = CONFIG.COLUMN_MAP;
     const todayString = new Date().toISOString().split("T")[0];
 
     const todayLeads = leads.filter(
       (r) =>
-        r[C.createdAt] &&
-        new Date(r[C.createdAt]).toISOString().split("T")[0] === todayString
+        r.date_and_time &&
+        new Date(r.date_and_time).toISOString().split("T")[0] === todayString
     ).length;
 
     const totalLeads = leads.length;
-    const todayFollowUps = leads.filter((r) => r[C.followUpDay] === todayString)
+    const todayFollowUps = leads.filter((r) => r.follow_up_day === todayString)
       .length;
 
     const wonRecords = leads.filter(
-      (r) => r[C.stage]?.toLowerCase() === "converted"
+      (r) => r.stage?.toLowerCase() === "converted"
     );
     const totalSales = wonRecords.reduce(
-      (sum, r) => sum + parseCurrency(r[C.dealAmount]),
+      (sum, r) => sum + parseCurrency(r.deal_amount),
       0
     );
 
