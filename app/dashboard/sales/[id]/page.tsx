@@ -23,6 +23,12 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 
 interface LeadRow {
   stage?: string | null;
@@ -175,17 +181,49 @@ export default function AdminSalesDetailPage() {
                   <div className="text-sm text-muted-foreground">This Month</div>
                   <div className="text-base font-semibold mt-1">Sales by Service</div>
                   <div className="h-72 mt-2">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ChartContainer
+                      config={{
+                        services: Object.fromEntries(
+                          monthlyByService.map((item, index) => [
+                            item.name,
+                            {
+                              label: item.name,
+                              color: pieColors[index % pieColors.length],
+                            },
+                          ])
+                        ),
+                      }}
+                      className="w-full h-full"
+                    >
                       <PieChart>
-                        <Pie data={monthlyByService} dataKey="value" nameKey="name" outerRadius={96}>
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent
+                              formatter={(value) => [currency.format(Number(value)), "Sales"]}
+                            />
+                          }
+                        />
+                        <Pie
+                          data={monthlyByService}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={96}
+                          strokeWidth={2}
+                          stroke="#ffffff"
+                        >
                           {monthlyByService.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={pieColors[index % pieColors.length]}
+                              stroke="#ffffff"
+                              strokeWidth={2}
+                            />
                           ))}
                         </Pie>
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <RechartsTooltip formatter={(v: any) => currency.format(Number(v))} />
                       </PieChart>
-                    </ResponsiveContainer>
+                    </ChartContainer>
                   </div>
                 </Card>
               </div>
