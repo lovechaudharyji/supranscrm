@@ -122,29 +122,60 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
         </div>
 
         {/* Stage Breakdown */}
-        <div className="w-full space-y-2">
-          {chartDataWithPercentage.map((entry, index) => (
-            <div
-              key={entry.name}
-              className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200"
-            >
-              <div className="flex items-center gap-3">
+        <div className="w-full">
+          {/* First row - 3 items */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            {chartDataWithPercentage.slice(0, 3).map((entry, index) => (
+              <div
+                key={entry.name}
+                className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200"
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="font-medium text-xs">{entry.name}</span>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold text-foreground text-xs">
+                    {entry.value}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {entry.percentage}%
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Second row - 2 items */}
+          {chartDataWithPercentage.length > 3 && (
+            <div className="grid grid-cols-2 gap-2">
+              {chartDataWithPercentage.slice(3, 5).map((entry, index) => (
                 <div
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                />
-                <span className="font-medium text-sm">{entry.name}</span>
-              </div>
-              <div className="text-right">
-                <div className="font-semibold text-foreground">
-                  {entry.value}
+                  key={entry.name}
+                  className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200"
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: COLORS[(index + 3) % COLORS.length] }}
+                    />
+                    <span className="font-medium text-xs">{entry.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-foreground text-xs">
+                      {entry.value}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {entry.percentage}%
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {entry.percentage}%
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       </CardContent>
     </Card>
