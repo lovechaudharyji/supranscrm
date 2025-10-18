@@ -12,7 +12,6 @@ import {
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { StageDoughnutChart } from "@/components/dashboard/stage-doughnut-chart";
 import { TopPerformersCard } from "@/components/dashboard/top-performers-card";
-import { LeadsBySourceChart } from "@/components/dashboard/leads-by-source-chart";
 import {
   AssignDialog,
   type Lead,
@@ -324,17 +323,6 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Leads by Source Chart */}
-              <div className="px-4 lg:px-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="h-[400px]">
-                    <LeadsBySourceChart />
-                  </div>
-                  <div className="h-[400px]">
-                    {/* You can add another chart here if needed */}
-                  </div>
-                </div>
-              </div>
 
               {/* Original Dashboard Components from Template */}
          
