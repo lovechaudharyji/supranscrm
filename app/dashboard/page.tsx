@@ -10,7 +10,6 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { SalesAreaChart } from "@/components/dashboard/sales-area-chart";
 import { StageDoughnutChart } from "@/components/dashboard/stage-doughnut-chart";
 import { TopPerformersCard } from "@/components/dashboard/top-performers-card";
 import { LeadsBySourceChart } from "@/components/dashboard/leads-by-source-chart";
@@ -305,23 +304,16 @@ export default function Page() {
                   salesData={charts.dailySales} 
                 />
               </div>
-              {/* Three Column Grid: Sales Performance, Leads by Stage, Top Performers */}
-              <div className="grid grid-cols-1 gap-4 px-4 md:gap-6 lg:px-6 @5xl/main:grid-cols-3">
-                {/* Sales Performance - Column 1 */}
-                <div className="@5xl/main:col-span-1 flex">
-                  <div className="flex-1 h-[600px]">
-                    <SalesAreaChart data={charts.dailySales} />
-                  </div>
-                </div>
-
-                {/* Leads by Stage - Column 2 */}
+              {/* Two Column Grid: Leads by Stage, Top Performers */}
+              <div className="grid grid-cols-1 gap-4 px-4 md:gap-6 lg:px-6 @5xl/main:grid-cols-2">
+                {/* Leads by Stage - Column 1 */}
                 <div className="@5xl/main:col-span-1 flex">
                   <div className="flex-1 h-[600px]">
                     <StageDoughnutChart data={charts.leadsByStage} />
                   </div>
                 </div>
 
-                {/* Top Performing Staff - Column 3 */}
+                {/* Top Performing Staff - Column 2 */}
                 <div className="@5xl/main:col-span-1 flex">
                   <div className="flex-1 h-[600px]">
                     <TopPerformersCard
