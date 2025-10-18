@@ -30,6 +30,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
+import { Users, TrendingUp } from "lucide-react"
 
 export const description = "An interactive area chart"
 
@@ -119,8 +120,14 @@ export function ChartAreaInteractive({
             variant="outline"
             className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
           >
-            <ToggleGroupItem value="leads">Total Leads</ToggleGroupItem>
-            <ToggleGroupItem value="sales">Sales Performance</ToggleGroupItem>
+            <ToggleGroupItem value="leads" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Total Leads
+            </ToggleGroupItem>
+            <ToggleGroupItem value="sales" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Sales Performance
+            </ToggleGroupItem>
           </ToggleGroup>
           <ToggleGroup
             type="single"
