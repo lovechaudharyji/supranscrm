@@ -55,6 +55,18 @@ export function BulkAssignDialog({
     return ["All", ...unique];
   }, [unassigned]);
 
+  // Filter employees to show only sales personnel
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp => 
+      emp.job_title?.toLowerCase().includes('sales') || 
+      emp.job_title?.toLowerCase().includes('rep') ||
+      emp.job_title?.toLowerCase().includes('manager') ||
+      emp.full_name?.toLowerCase().includes('sales') || 
+      emp.full_name?.toLowerCase().includes('rep') ||
+      emp.full_name?.toLowerCase().includes('manager')
+    );
+  }, [employees]);
+
   // Filter leads by service + search
   const filteredLeads = useMemo(() => {
     return unassigned.filter((lead) => {
@@ -120,10 +132,10 @@ export function BulkAssignDialog({
                 value={employee || ""}
               >
                 <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Select Employee" />
+                  <SelectValue placeholder="Select Sales Person" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.map((e) => (
+                  {filteredEmployees.map((e) => (
                     <SelectItem
                       key={e.whalesync_postgres_id}
                       value={e.whalesync_postgres_id}
@@ -133,6 +145,7 @@ export function BulkAssignDialog({
                   ))}
                 </SelectContent>
               </Select>
+              
               <span className="text-sm text-muted-foreground ml-auto">
                 {selected.size} selected
               </span>

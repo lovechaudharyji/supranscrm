@@ -79,7 +79,8 @@ export default function Page() {
   const fetchEmployees = async (): Promise<Employee[]> => {
     const { data, error } = await supabase
       .from("Employee Directory")
-      .select("whalesync_postgres_id, full_name");
+      .select("whalesync_postgres_id, full_name, job_title")
+      .eq('status', 'Active');
     if (error) throw error;
     return data || [];
   };
@@ -90,9 +91,11 @@ export default function Page() {
     const { data, error } = await supabase
       .from("Departments")
       .select(
-        "whalesync_postgres_id, department_name, employees (whalesync_postgres_id, full_name)"
+        "whalesync_postgres_id, department_name, employees!inner (whalesync_postgres_id, full_name, job_title, status)"
       )
       .eq("department_name", deptName)
+      .eq("employees.status", "Active")
+      .ilike("employees.job_title", "%Sales%")
       .limit(1)
       .single();
 
@@ -289,6 +292,13 @@ export default function Page() {
                   >
                     {isRefreshing ? "Refreshing..." : "Refresh Data"}
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.href = '/dashboard/admin'}
+                    size="sm"
+                  >
+                    Admin Dashboard
+                  </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">{lastUpdated}</p>
               </div>
@@ -344,14 +354,14 @@ export default function Page() {
           open={assignDialogOpen}
           onOpenChange={setAssignDialogOpen}
           leads={leads}
-          employees={deptEmployees}
+          employees={employees}
           reload={loadDashboard}
         />
         <BulkAssignDialog
           open={bulkDialogOpen}
           onOpenChange={setBulkDialogOpen}
           leads={leads}
-          employees={deptEmployees}
+          employees={employees}
           reload={loadDashboard}
         />
         <ReassignDialog

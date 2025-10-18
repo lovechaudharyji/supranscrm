@@ -18,7 +18,7 @@ import LeadCardsMobile from "@/components/leadspagecomponent/LeadCardsMobile";
 import LeadFormModal from "@/components/leadspagecomponent/LeadFormModal";
 import ExportButton from "@/components/leadspagecomponent/ExportButton";
 import LeadCards from "@/components/leadspagecomponent/LeadCards";
-import { LayoutGrid, Table as TableIcon } from "lucide-react";
+import { LayoutGrid, Table as TableIcon, Zap, Brain, MessageCircle, TrendingUp } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -207,6 +207,16 @@ export default function LeadsPage() {
 
                   {/* Export Button */}
                   <ExportButton data={data} />
+
+                  {/* Enhanced Leads Button */}
+                  <Button
+                    variant="outline"
+                    onClick={() => window.location.href = '/dashboard/leads/enhanced'}
+                    className="h-10 bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:from-purple-600 hover:to-blue-600 border-0"
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Enhanced Leads
+                  </Button>
                 </div>
               </div>
 

@@ -25,6 +25,7 @@ export interface Lead {
 export interface Employee {
   whalesync_postgres_id: string;
   full_name: string | null;
+  job_title?: string | null;
 }
 
 interface AssignDialogProps {

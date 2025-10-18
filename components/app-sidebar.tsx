@@ -53,6 +53,11 @@ const data = {
       icon: IconListDetails,
     },
     {
+      title: "Admin Dashboard",
+      url: "/dashboard/admin",
+      icon: IconSettings,
+    },
+    {
       title: "Auto-Assignment",
       url: "/dashboard/admin/auto-assignment",
       icon: IconSettings,

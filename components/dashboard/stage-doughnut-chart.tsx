@@ -69,9 +69,9 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
 
   return (
     <Card className="h-full">
-      <CardHeader>
-        <CardTitle>Leads by Stage</CardTitle>
-      </CardHeader>
+        <CardHeader>
+          <CardTitle style={{ fontFamily: 'Geist, sans-serif' }}>Leads by Stage</CardTitle>
+        </CardHeader>
       <CardContent className="flex flex-col items-center space-y-6">
         {/* Donut Chart */}
         <div className="relative w-64 h-64">
@@ -116,8 +116,8 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
           
           {/* Center Text */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-3xl font-bold text-foreground">{totalLeads}</div>
-            <div className="text-sm text-muted-foreground">Leads</div>
+            <div className="text-3xl font-bold text-foreground" style={{ fontFamily: 'Geist, sans-serif' }}>{totalLeads}</div>
+            <div className="text-sm text-muted-foreground" style={{ fontFamily: 'Geist, sans-serif' }}>Leads</div>
           </div>
         </div>
 
@@ -128,21 +128,22 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
             {chartDataWithPercentage.slice(0, 3).map((entry, index) => (
               <div
                 key={entry.name}
-                className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200"
+                className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-background to-muted/20 p-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div
-                    className="h-3 w-3 rounded-full"
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  />
-                  <span className="font-medium text-xs">{entry.name}</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-foreground text-xs">
+                  >
                     {entry.value}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {entry.percentage}%
+                  <div className="flex-1">
+                    <div className="font-bold text-base text-foreground group-hover:text-primary transition-colors" style={{ fontFamily: 'Geist, sans-serif' }}>
+                      {entry.name}
+                    </div>
+                    <div className="text-sm text-muted-foreground" style={{ fontFamily: 'Geist, sans-serif' }}>
+                      {entry.percentage}% of total
+                    </div>
                   </div>
                 </div>
               </div>
@@ -155,21 +156,22 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
               {chartDataWithPercentage.slice(3, 5).map((entry, index) => (
                 <div
                   key={entry.name}
-                  className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200"
+                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-background to-muted/20 p-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div
-                      className="h-3 w-3 rounded-full"
+                      className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
                       style={{ backgroundColor: COLORS[(index + 3) % COLORS.length] }}
-                    />
-                    <span className="font-medium text-xs">{entry.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold text-foreground text-xs">
+                    >
                       {entry.value}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {entry.percentage}%
+                    <div className="flex-1">
+                      <div className="font-bold text-base text-foreground group-hover:text-primary transition-colors" style={{ fontFamily: 'Geist, sans-serif' }}>
+                        {entry.name}
+                      </div>
+                      <div className="text-sm text-muted-foreground" style={{ fontFamily: 'Geist, sans-serif' }}>
+                        {entry.percentage}% of total
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -181,4 +183,6 @@ export function StageDoughnutChart({ data }: { data: Record<string, number> }) {
     </Card>
   )
 }
+
+
 
