@@ -475,8 +475,8 @@ export default function DocumentsPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <div className="flex flex-col h-screen">
+      <SidebarInset className="h-screen overflow-hidden">
+        <div className="flex flex-col h-full overflow-hidden">
           {/* Header - Fixed */}
           <SiteHeader title="Documents" />
 
@@ -687,7 +687,7 @@ export default function DocumentsPage() {
             </div>
 
             {/* Table or Kanban Container - Scrollable */}
-            <div className="flex-1 overflow-hidden px-4">
+            <div className="flex-1 overflow-y-auto px-4 min-h-0">
               {showKanban ? (
                 <div className="h-full overflow-auto">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -796,7 +796,7 @@ export default function DocumentsPage() {
                       <col className="w-[120px]" />
                       <col className="w-[120px]" />
                     </colgroup>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
                         {visibleColumns.document && (
                           <TableHead className="text-xs font-semibold text-foreground px-3 py-3">

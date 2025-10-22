@@ -477,10 +477,10 @@ function SubscriptionsPageContent() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="h-screen overflow-hidden">
         <SiteHeader />
-        <div className="flex flex-1 flex-col">
-          <div className="flex-1 overflow-auto p-1">
+        <div className="flex flex-1 flex-col h-full overflow-hidden font-sans">
+          <div className="flex-1 overflow-hidden p-1">
             {/* Navigation */}
             <div className="flex items-center gap-4 mb-1">
               {currentPage === 'details' && (
@@ -497,7 +497,7 @@ function SubscriptionsPageContent() {
 
             {/* Dashboard Page */}
             {currentPage === 'dashboard' && (
-              <div className="space-y-1">
+              <div className="space-y-1 overflow-y-auto h-full">
                 {/* Dashboard Toggle Buttons */}
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1 border rounded-md p-1">
@@ -623,7 +623,7 @@ function SubscriptionsPageContent() {
 
             {/* Subscriptions List Page */}
             {currentPage === 'subscriptions' && (
-              <div className="flex flex-col h-screen">
+              <div className="flex flex-col h-full overflow-hidden">
                 {/* Action Bar - Fixed */}
                 <div className="flex items-center gap-3 px-4 pb-2 flex-shrink-0 flex-wrap">
                   {/* Dashboard/Subscriptions Toggle */}
@@ -856,10 +856,10 @@ function SubscriptionsPageContent() {
 
                 {/* Table Container - Scrollable */}
                 {!showKanban ? (
-                  <div className="flex-1 overflow-auto px-4">
+                  <div className="flex-1 overflow-y-auto px-4 min-h-0">
                     <div className="w-full rounded-md border">
                       <Table className="w-full">
-                      <TableHeader>
+                      <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           {visibleColumns.subscription && (
                             <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
@@ -1074,7 +1074,7 @@ function SubscriptionsPageContent() {
                 </div>
                 ) : (
                   /* Kanban View */
-                  <div className="flex-1 overflow-auto px-4">
+                  <div className="flex-1 overflow-y-auto px-4 min-h-0">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                       {/* Active Column */}
                       <div className="bg-muted/30 border border-border rounded-lg p-4">
@@ -1304,7 +1304,7 @@ function SubscriptionsPageContent() {
 
             {/* Details Page */}
             {currentPage === 'details' && selectedSubscription && (
-              <div className="space-y-6">
+              <div className="space-y-6 overflow-y-auto h-full">
                 <Card>
                   <CardContent className="p-8">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

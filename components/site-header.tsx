@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Bell, Search, Settings, StickyNote, Save, X, Edit2, Loader2, Trash2, Pencil, Megaphone, CreditCard } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { QuickActionsDock } from "@/components/employee/QuickActionsDock"
@@ -308,9 +309,17 @@ export function SiteHeader({
 
   return (
     <>
+    <TooltipProvider>
     <header className="flex h-16 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
       <div className="flex w-full items-center gap-3 px-4 lg:gap-4 lg:px-6">
-        <SidebarTrigger className="-ml-1" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarTrigger className="-ml-1" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Toggle Sidebar</p>
+          </TooltipContent>
+        </Tooltip>
         <Separator
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
@@ -318,103 +327,158 @@ export function SiteHeader({
         <h1 className="text-base font-semibold">{dynamicTitle}</h1>
         
         {/* Search Bar */}
-        <div className="relative ml-auto flex-1 max-w-md hidden lg:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search..."
-            className="pl-9 pr-12 h-9 bg-background"
-          />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
-            <span className="text-xs">⌘</span>K
-          </kbd>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="relative ml-auto flex-1 max-w-md hidden lg:block">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search..."
+                className="pl-9 pr-12 h-9 bg-background"
+              />
+              <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden h-6 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+                <span className="text-xs">⌘</span>K
+              </kbd>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Search (⌘K)</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Create Announcement - placed right of search bar */}
-        <Button
-          variant="outline"
-          className="h-9 hidden md:inline-flex"
-          onClick={() => {
-            try {
-              window.dispatchEvent(new Event('open-announcement'))
-            } catch {}
-          }}
-        >
-          <Megaphone className="h-4 w-4 mr-2" />
-          Create Announcement
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              className="h-9 hidden md:inline-flex"
+              onClick={() => {
+                try {
+                  window.dispatchEvent(new Event('open-announcement'))
+                } catch {}
+              }}
+            >
+              <Megaphone className="h-4 w-4 mr-2" />
+              Create Announcement
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Create New Announcement</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Quick Notes Button */}
         {showQuickNotes && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-9 w-9 relative" 
-            onClick={handleOpenNotes}
-            title={`Quick Notes (${notes.length})`}
-          >
-            <StickyNote className="h-[1.2rem] w-[1.2rem]" />
-            {notes.length > 0 && (
-              <Badge
-                className="absolute -right-1 -top-1 h-5 min-w-[1.25rem] flex items-center justify-center rounded-full px-1 text-[10px] font-semibold bg-primary text-primary-foreground"
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 relative" 
+                onClick={handleOpenNotes}
               >
-                {notes.length}
-              </Badge>
-            )}
-            <span className="sr-only">Quick Notes ({notes.length})</span>
-          </Button>
+                <StickyNote className="h-[1.2rem] w-[1.2rem]" />
+                {notes.length > 0 && (
+                  <Badge
+                    className="absolute -right-1 -top-1 h-5 min-w-[1.25rem] flex items-center justify-center rounded-full px-1 text-[10px] font-semibold bg-primary text-primary-foreground"
+                  >
+                    {notes.length}
+                  </Badge>
+                )}
+                <span className="sr-only">Quick Notes ({notes.length})</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Quick Notes ({notes.length})</p>
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {/* Payment Button */}
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-9 w-9" 
-          onClick={() => window.open('https://payment-frontend-amber.vercel.app/', '_blank')}
-          title="Payment System"
-        >
-          <CreditCard className="h-[1.2rem] w-[1.2rem]" />
-          <span className="sr-only">Payment System</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9" 
+              onClick={() => window.open('https://payment-frontend-amber.vercel.app/', '_blank')}
+            >
+              <CreditCard className="h-[1.2rem] w-[1.2rem]" />
+              <span className="sr-only">Payment System</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Payment System</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Quick Actions Dock */}
-        <div className="hidden xl:block">
-          <QuickActionsDock />
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="hidden xl:block">
+              <QuickActionsDock />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Quick Actions</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Right side actions */}
         <div className="flex items-center gap-2">
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="h-9 w-9 relative">
-            <Bell className="h-[1.2rem] w-[1.2rem]" />
-            <Badge
-              variant="destructive"
-              className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-bold"
-            >
-              3
-            </Badge>
-            <span className="sr-only">Notifications</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9 relative">
+                <Bell className="h-[1.2rem] w-[1.2rem]" />
+                <Badge
+                  variant="destructive"
+                  className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-bold"
+                >
+                  3
+                </Badge>
+                <span className="sr-only">Notifications</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Notifications (3)</p>
+            </TooltipContent>
+          </Tooltip>
 
           {/* Theme Toggle */}
           <ThemeToggle />
 
           {/* Settings */}
-          <Button variant="ghost" size="icon" className="h-9 w-9">
-            <Settings className="h-[1.2rem] w-[1.2rem]" />
-            <span className="sr-only">Settings</span>
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-9 w-9">
+                <Settings className="h-[1.2rem] w-[1.2rem]" />
+                <span className="sr-only">Settings</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Settings</p>
+            </TooltipContent>
+          </Tooltip>
 
           {/* User Avatar */}
-          <Avatar className="h-8 w-8 rounded-lg">
-            <AvatarImage src="" alt="User" />
-            <AvatarFallback className="rounded-lg bg-primary text-primary-foreground font-semibold">
-              AU
-            </AvatarFallback>
-          </Avatar>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src="" alt="User" />
+                <AvatarFallback className="rounded-lg bg-primary text-primary-foreground font-semibold">
+                  AU
+                </AvatarFallback>
+              </Avatar>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>User Profile</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </header>
+    </TooltipProvider>
 
     {/* Quick Notes Drawer */}
     <Sheet open={isNotesOpen} onOpenChange={setIsNotesOpen}>

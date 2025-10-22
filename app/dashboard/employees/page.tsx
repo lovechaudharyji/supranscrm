@@ -533,50 +533,118 @@ export default function EmployeesPage() {
 
   // Render employee grid view (without pagination)
   const renderEmployeeGrid = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-6">
       {paginatedEmployees.map((emp, index) => (
         <div 
           key={`employee-grid-${emp.id ?? emp.whalesync_postgres_id ?? 'unknown'}-${emp.official_email}-${index}`}
-          className="bg-white dark:bg-card rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300"
+          className="bg-card border border-primary/20 rounded-lg p-4 hover:shadow-lg transition-shadow duration-300"
         >
-          <div className="h-24 bg-gradient-to-r from-primary/10 to-primary/20" />
-          <div className="p-4 relative">
-            <Avatar className="h-20 w-20 absolute -top-10 left-1/2 -translate-x-1/2 border-4 border-white dark:border-background">
+          {/* Top Section - Profile Picture, Name, and Badge */}
+          <div className="flex items-start gap-3 mb-4">
+            {/* Profile Picture */}
+            <Avatar className="h-12 w-12 flex-shrink-0">
               <AvatarImage 
                 src={emp.profile_photo || '/placeholder-avatar.png'} 
-                alt={emp.full_name} 
+                alt={emp.full_name}
+                className="object-cover"
               />
-              <AvatarFallback>{emp.full_name.charAt(0)}</AvatarFallback>
+              <AvatarFallback className="text-sm font-semibold bg-muted">
+                {emp.full_name.charAt(0)}
+              </AvatarFallback>
             </Avatar>
-            <div className="pt-12 text-center">
-              <h3 className="text-lg font-bold">{emp.full_name}</h3>
-              <p className="text-sm text-muted-foreground">{emp.official_email}</p>
+            
+            {/* Name and Badge */}
+            <div className="flex-1">
+              <h3 className="text-base font-bold text-foreground mb-1">
+                {emp.full_name}
+              </h3>
+              <Badge variant="secondary" className="text-xs">
+                {emp.job_title || 'Unassigned'}
+              </Badge>
             </div>
-            <div className="mt-4 flex justify-around text-center text-sm">
-              <div>
-                <p className="font-semibold text-muted-foreground">Team</p>
-                <Badge variant="outline">{emp.teams?.team_name || 'N/A'}</Badge>
+          </div>
+
+          {/* Middle Section - Details with colored dots */}
+          <div className="space-y-2 mb-4">
+            {/* Team */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-gray-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">Team</span>
               </div>
-              <div>
-                <p className="font-semibold text-muted-foreground">Position</p>
-                <p className="text-foreground">{emp.job_title || 'N/A'}</p>
+              <span className="text-xs text-foreground">
+                {emp.teams?.team_name || 'Unassigned'}
+              </span>
+            </div>
+
+            {/* Type */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">Type</span>
+              </div>
+              <span className="text-xs text-foreground">
+                {emp.employment_type || 'Intern'}
+              </span>
+            </div>
+
+            {/* ID */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">ID</span>
+              </div>
+              <span className="text-xs text-foreground font-mono">
+                #{emp.id}
+              </span>
+            </div>
+          </div>
+
+          {/* Bottom Section - Metrics and Actions */}
+          <div className="flex items-center justify-between">
+            {/* Metrics Cards */}
+            <div className="flex gap-2">
+              {/* Performance Card */}
+              <div className="bg-muted/50 rounded-md p-2 min-w-[60px]">
+                <div className="text-sm font-bold text-foreground">98%</div>
+                <div className="text-[10px] text-muted-foreground">Performance</div>
+              </div>
+              
+              {/* Rating Card */}
+              <div className="bg-muted/50 rounded-md p-2 min-w-[60px]">
+                <div className="text-sm font-bold text-foreground">4.8</div>
+                <div className="text-[10px] text-muted-foreground">Rating</div>
               </div>
             </div>
-            <div className="mt-4 flex justify-center space-x-2">
+
+            {/* Action Icons */}
+            <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
-                size="icon" 
-                onClick={() => setSelectedEmployee(emp)}
+                size="icon"
+                onClick={() => {
+                  setSelectedEmployeeId(emp.id);
+                  setDetailsModalOpen(true);
+                }}
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
               >
-                <Edit2 className="h-4 w-4" />
+                <Eye className="h-3 w-3" />
               </Button>
               <Button 
                 variant="ghost" 
-                size="icon" 
-                className="text-destructive hover:text-destructive"
-                onClick={() => handleDelete(emp.id)}
+                size="icon"
+                onClick={() => setSelectedEmployee(emp)}
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
               >
-                <Trash2 className="h-4 w-4" />
+                <Edit2 className="h-3 w-3" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => handleDelete(emp.id)}
+                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
               </Button>
             </div>
           </div>

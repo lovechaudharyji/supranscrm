@@ -16,7 +16,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Calendar, User, Clock, CheckCircle, AlertCircle, XCircle, Grid3X3, Table, CalendarDays, LayoutGrid, Share, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Search, Settings, ChevronDown } from "lucide-react";
+import { Plus, Calendar, User, Clock, CheckCircle, AlertCircle, XCircle, Grid3X3, Table, CalendarDays, LayoutGrid, Share, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Search, Settings, ChevronDown, DollarSign, Users, TrendingUp } from "lucide-react";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Table as UITable, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
@@ -48,7 +49,7 @@ export default function TaskManagerPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [viewType, setViewType] = useState<"kanban" | "table" | "calendar" | "cards">("kanban");
+  const [viewType, setViewType] = useState<"kanban" | "table" | "calendar">("table");
   const [sortField, setSortField] = useState<string>("created_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [searchTerm, setSearchTerm] = useState("");
@@ -73,6 +74,16 @@ export default function TaskManagerPage() {
   const [shareForm, setShareForm] = useState({
     assignee: "",
     message: "",
+  });
+
+  // Column customization states
+  const [visibleColumns, setVisibleColumns] = useState({
+    task: true,
+    assignee: true,
+    status: true,
+    priority: true,
+    dueDate: true,
+    actions: true,
   });
 
   useEffect(() => {
@@ -277,6 +288,50 @@ export default function TaskManagerPage() {
     });
   };
 
+  const handleDragEnd = async (result: any) => {
+    const { destination, source, draggableId } = result;
+
+    // If dropped outside a droppable area
+    if (!destination) {
+      return;
+    }
+
+    // If dropped in the same position
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    const newStatus = destination.droppableId;
+    const taskId = draggableId;
+
+    try {
+      // Update task status in database
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: newStatus })
+        .eq("id", taskId);
+
+      if (error) {
+        console.error("Error updating task status:", error);
+        toast.error("Failed to update task status");
+        return;
+      }
+
+      // Update local state
+      setTasks(tasks.map(task => 
+        task.id === taskId ? { ...task, status: newStatus } : task
+      ));
+
+      toast.success("Task moved successfully");
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      toast.error("Failed to update task status");
+    }
+  };
+
   const getAssigneeName = (assigneeId: string) => {
     const employee = employees.find(emp => emp.whalesync_postgres_id === assigneeId);
     return employee?.full_name || "Unknown";
@@ -314,6 +369,13 @@ export default function TaskManagerPage() {
       return <ArrowUpDown className="h-4 w-4" />;
     }
     return sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />;
+  };
+
+  // Calculate task statistics
+  const taskStats = {
+    pending: tasks.filter(task => task.status === 'pending').length,
+    inProgress: tasks.filter(task => task.status === 'in_progress').length,
+    completed: tasks.filter(task => task.status === 'completed').length,
   };
 
   // Filter tasks based on search and filters
@@ -401,10 +463,52 @@ export default function TaskManagerPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-screen font-sans">
           <SiteHeader />
           <div className="flex-1 p-6">
             <div className="space-y-6">
+
+              {/* Task Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Pending Tasks Card */}
+                <Card className="bg-gradient-to-t from-primary/5 to-card dark:bg-card shadow-xs">
+                  <CardHeader>
+                    <CardDescription className="flex items-center justify-between">
+                      <span>Pending Tasks</span>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardDescription>
+                    <CardTitle className="text-2xl font-semibold tabular-nums">
+                      {taskStats.pending}
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+
+                {/* In Progress Tasks Card */}
+                <Card className="bg-gradient-to-t from-primary/5 to-card dark:bg-card shadow-xs">
+                  <CardHeader>
+                    <CardDescription className="flex items-center justify-between">
+                      <span>In Progress</span>
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardDescription>
+                    <CardTitle className="text-2xl font-semibold tabular-nums">
+                      {taskStats.inProgress}
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+
+                {/* Completed Tasks Card */}
+                <Card className="bg-gradient-to-t from-primary/5 to-card dark:bg-card shadow-xs">
+                  <CardHeader>
+                    <CardDescription className="flex items-center justify-between">
+                      <span>Completed</span>
+                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardDescription>
+                    <CardTitle className="text-2xl font-semibold tabular-nums">
+                      {taskStats.completed}
+                    </CardTitle>
+                  </CardHeader>
+                </Card>
+              </div>
 
               {/* Action Bar */}
               <div className="flex items-center gap-3 flex-wrap">
@@ -558,7 +662,7 @@ export default function TaskManagerPage() {
                 <ToggleGroup
                   type="single"
                   value={viewType}
-                  onValueChange={(value) => setViewType(value as "kanban" | "table" | "calendar" | "cards")}
+                  onValueChange={(value) => setViewType(value as "kanban" | "table" | "calendar")}
                   variant="outline"
                   className="flex"
                 >
@@ -571,16 +675,63 @@ export default function TaskManagerPage() {
                   <ToggleGroupItem value="calendar" aria-label="Calendar view">
                     <CalendarDays className="h-4 w-4" />
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="cards" aria-label="Cards view">
-                    <LayoutGrid className="h-4 w-4" />
-                  </ToggleGroupItem>
                 </ToggleGroup>
 
-                {/* Customize Columns Button */}
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Customize Columns
-                </Button>
+                {/* Customize Columns Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Settings className="h-4 w-4" />
+                      Customize Columns
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56">
+                    <div className="flex items-center justify-between p-2">
+                      <span className="text-sm font-medium">Column Filter</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setVisibleColumns({
+                            task: true,
+                            assignee: true,
+                            status: true,
+                            priority: true,
+                            dueDate: true,
+                            actions: true,
+                          });
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Clear All
+                      </Button>
+                    </div>
+                    <div className="space-y-1 p-2">
+                      {Object.entries(visibleColumns).map(([key, value]) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`column-${key}`}
+                            checked={value}
+                            onCheckedChange={(checked) => {
+                              setVisibleColumns(prev => ({
+                                ...prev,
+                                [key]: checked
+                              }));
+                            }}
+                          />
+                          <Label htmlFor={`column-${key}`} className="text-sm capitalize">
+                            {key === 'task' ? 'Task' :
+                             key === 'assignee' ? 'Assignee' :
+                             key === 'status' ? 'Status' :
+                             key === 'priority' ? 'Priority' :
+                             key === 'dueDate' ? 'Due Date' :
+                             key === 'actions' ? 'Actions' : key}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Task Views */}
@@ -678,86 +829,116 @@ export default function TaskManagerPage() {
                 <>
                   {/* Kanban View */}
                   {viewType === "kanban" && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {["pending", "in_progress", "completed"].map((status) => (
-                        <div key={status} className="space-y-4">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-3 h-3 rounded-full ${getStatusColor(status)}`} />
-                            <h3 className="font-semibold capitalize">{status.replace('_', ' ')}</h3>
-                            <Badge variant="secondary" className="ml-auto">
-                              {filteredTasks.filter(task => task.status === status).length}
-                            </Badge>
-                          </div>
-                          <div className="space-y-3">
-                            {filteredTasks
-                              .filter(task => task.status === status)
-                              .map((task) => (
-                                <Card key={task.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                                  <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
-                                      <div className="space-y-1">
-                                        <CardTitle className="text-sm">{task.title}</CardTitle>
-                                        {task.description && (
-                                          <CardDescription className="text-xs">
-                                            {task.description}
-                                          </CardDescription>
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {["pending", "in_progress", "completed"].map((status) => (
+                          <div key={status} className="space-y-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-3 h-3 rounded-full ${getStatusColor(status)}`} />
+                              <h3 className="font-semibold capitalize">{status.replace('_', ' ')}</h3>
+                              <Badge variant="secondary" className="ml-auto">
+                                {filteredTasks.filter(task => task.status === status).length}
+                              </Badge>
+                            </div>
+                            <Droppable droppableId={status}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.droppableProps}
+                                  className={`space-y-3 min-h-[200px] p-2 rounded-lg transition-colors ${
+                                    snapshot.isDraggingOver ? 'bg-primary/5' : ''
+                                  }`}
+                                >
+                                  {filteredTasks
+                                    .filter(task => task.status === status)
+                                    .map((task, index) => (
+                                      <Draggable key={task.id} draggableId={task.id} index={index}>
+                                        {(provided, snapshot) => (
+                                          <Card 
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            {...provided.dragHandleProps}
+                                            className={`hover:shadow-md transition-shadow cursor-pointer ${
+                                              snapshot.isDragging ? 'shadow-lg rotate-2' : ''
+                                            }`}
+                                          >
+                                            <CardHeader className="pb-3">
+                                              <div className="flex items-start justify-between">
+                                                <div className="space-y-1">
+                                                  <CardTitle className="text-sm">{task.title}</CardTitle>
+                                                  {task.description && (
+                                                    <CardDescription className="text-xs">
+                                                      {task.description}
+                                                    </CardDescription>
+                                                  )}
+                                                </div>
+                                                <Badge variant={getPriorityColor(task.priority) as any} className="text-xs">
+                                                  {task.priority}
+                                                </Badge>
+                                              </div>
+                                            </CardHeader>
+                                            <CardContent className="pt-0">
+                                              <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                  <Avatar className="h-5 w-5">
+                                                    <AvatarImage src={getAssigneePhoto(task.assignee || "")} />
+                                                    <AvatarFallback className="text-xs">
+                                                      {getAssigneeName(task.assignee || "").slice(0, 2).toUpperCase()}
+                                                    </AvatarFallback>
+                                                  </Avatar>
+                                                  <span className="text-xs">{getAssigneeName(task.assignee || "")}</span>
+                                                </div>
+                                                
+                                                {task.due_date && (
+                                                  <div className="flex items-center gap-1">
+                                                    <Calendar className="h-3 w-3 text-muted-foreground" />
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {new Date(task.due_date).toLocaleDateString()}
+                                                    </span>
+                                                  </div>
+                                                )}
+                                                
+                                                <div className="flex gap-2 pt-2">
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleShareTask(task);
+                                                    }}
+                                                    className="h-7 px-2 text-xs"
+                                                    title="Share task with another employee"
+                                                  >
+                                                    <Share className="h-3 w-3 mr-1" />
+                                                    Share
+                                                  </Button>
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleDeleteTask(task.id);
+                                                    }}
+                                                    className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                                                  >
+                                                    <X className="h-3 w-3 mr-1" />
+                                                    Delete
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            </CardContent>
+                                          </Card>
                                         )}
-                                      </div>
-                                      <Badge variant={getPriorityColor(task.priority) as any} className="text-xs">
-                                        {task.priority}
-                                      </Badge>
-                                    </div>
-                                  </CardHeader>
-                                  <CardContent className="pt-0">
-                                    <div className="space-y-2">
-                                      <div className="flex items-center gap-2">
-                                        <Avatar className="h-5 w-5">
-                                          <AvatarImage src={getAssigneePhoto(task.assignee || "")} />
-                                          <AvatarFallback className="text-xs">
-                                            {getAssigneeName(task.assignee || "").slice(0, 2).toUpperCase()}
-                                          </AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-xs">{getAssigneeName(task.assignee || "")}</span>
-                                      </div>
-                                      
-                                      {task.due_date && (
-                                        <div className="flex items-center gap-1">
-                                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                                          <span className="text-xs text-muted-foreground">
-                                            {new Date(task.due_date).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                      )}
-                                      
-                                      <div className="flex gap-2 pt-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleShareTask(task)}
-                                          className="h-7 px-2 text-xs"
-                                          title="Share task with another employee"
-                                        >
-                                          <Share className="h-3 w-3 mr-1" />
-                                          Share
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => handleDeleteTask(task.id)}
-                                          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                                        >
-                                          <X className="h-3 w-3 mr-1" />
-                                          Delete
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              ))}
+                                      </Draggable>
+                                    ))}
+                                  {provided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </DragDropContext>
                   )}
 
                   {/* Table View */}
@@ -766,59 +947,71 @@ export default function TaskManagerPage() {
                       <UITable className="w-full">
                         <TableHeader>
                           <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("title")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Task
-                                {getSortIcon("title")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("assignee")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Assignee
-                                {getSortIcon("assignee")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("status")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Status
-                                {getSortIcon("status")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("priority")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Priority
-                                {getSortIcon("priority")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("due_date")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Due Date
-                                {getSortIcon("due_date")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              Actions
-                            </TableHead>
+                            {visibleColumns.task && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("title")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Task
+                                  {getSortIcon("title")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.assignee && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("assignee")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Assignee
+                                  {getSortIcon("assignee")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.status && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("status")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Status
+                                  {getSortIcon("status")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.priority && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("priority")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Priority
+                                  {getSortIcon("priority")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.dueDate && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("due_date")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Due Date
+                                  {getSortIcon("due_date")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.actions && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                Actions
+                              </TableHead>
+                            )}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -846,79 +1039,91 @@ export default function TaskManagerPage() {
                             })
                             .map((task) => (
                               <TableRow key={task.id} className="hover:bg-muted/50">
-                                <TableCell className="px-3 py-3">
-                                  <div>
-                                    <div className="font-medium text-sm">{task.title}</div>
-                                    {task.description && (
-                                      <div className="text-xs text-muted-foreground truncate max-w-[200px]" title={task.description}>
-                                        {task.description}
-                                      </div>
+                                {visibleColumns.task && (
+                                  <TableCell className="px-3 py-3">
+                                    <div>
+                                      <div className="font-medium text-sm">{task.title}</div>
+                                      {task.description && (
+                                        <div className="text-xs text-muted-foreground truncate max-w-[200px]" title={task.description}>
+                                          {task.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.assignee && (
+                                  <TableCell className="px-3 py-3">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-6 w-6">
+                                        <AvatarImage src={getAssigneePhoto(task.assignee || "")} />
+                                        <AvatarFallback className="text-xs">
+                                          {getAssigneeName(task.assignee || "").slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="text-sm truncate">{getAssigneeName(task.assignee || "")}</span>
+                                    </div>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.status && (
+                                  <TableCell className="px-3 py-3">
+                                    <Select
+                                      value={task.status}
+                                      onValueChange={(value) => handleUpdateStatus(task.id, value)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs w-32">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="pending">Pending</SelectItem>
+                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                        <SelectItem value="completed">Completed</SelectItem>
+                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.priority && (
+                                  <TableCell className="px-3 py-3">
+                                    <Badge variant={getPriorityColor(task.priority) as any}>
+                                      {task.priority}
+                                    </Badge>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.dueDate && (
+                                  <TableCell className="px-3 py-3">
+                                    {task.due_date ? (
+                                      <span className="text-sm">
+                                        {new Date(task.due_date).toLocaleDateString()}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground text-sm">No due date</span>
                                     )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-3 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <Avatar className="h-6 w-6">
-                                      <AvatarImage src={getAssigneePhoto(task.assignee || "")} />
-                                      <AvatarFallback className="text-xs">
-                                        {getAssigneeName(task.assignee || "").slice(0, 2).toUpperCase()}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-sm truncate">{getAssigneeName(task.assignee || "")}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="px-3 py-3">
-                                  <Select
-                                    value={task.status}
-                                    onValueChange={(value) => handleUpdateStatus(task.id, value)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs w-32">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="pending">Pending</SelectItem>
-                                      <SelectItem value="in_progress">In Progress</SelectItem>
-                                      <SelectItem value="completed">Completed</SelectItem>
-                                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                                <TableCell className="px-3 py-3">
-                                  <Badge variant={getPriorityColor(task.priority) as any}>
-                                    {task.priority}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="px-3 py-3">
-                                  {task.due_date ? (
-                                    <span className="text-sm">
-                                      {new Date(task.due_date).toLocaleDateString()}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground text-sm">No due date</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="px-3 py-3">
-                                  <div className="flex gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleShareTask(task)}
-                                      className="h-8 w-8 p-0"
-                                      title="Share task"
-                                    >
-                                      <Share className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteTask(task.id)}
-                                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                      title="Delete task"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
+                                  </TableCell>
+                                )}
+                                {visibleColumns.actions && (
+                                  <TableCell className="px-3 py-3">
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleShareTask(task)}
+                                        className="h-8 w-8 p-0"
+                                        title="Share task"
+                                      >
+                                        <Share className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                        title="Delete task"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                )}
                               </TableRow>
                             ))}
                         </TableBody>
@@ -1078,105 +1283,6 @@ export default function TaskManagerPage() {
                     </div>
                   )}
 
-                  {/* Cards View */}
-                  {viewType === "cards" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredTasks.map((task) => (
-                        <Card key={task.id} className="hover:shadow-md transition-shadow">
-                          <CardHeader className="pb-3">
-                            <div className="flex items-start justify-between">
-                              <div className="space-y-1">
-                                <CardTitle className="text-lg">{task.title}</CardTitle>
-                                {task.description && (
-                                  <CardDescription className="text-sm">
-                                    {task.description}
-                                  </CardDescription>
-                                )}
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                <Badge variant={getPriorityColor(task.priority) as any}>
-                                  {task.priority}
-                                </Badge>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                  {task.status.replace('_', ' ')}
-                                </span>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="pt-0">
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarImage src={getAssigneePhoto(task.assignee || "")} />
-                                    <AvatarFallback className="text-xs">
-                                      {getAssigneeName(task.assignee || "").slice(0, 2).toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="text-sm">{getAssigneeName(task.assignee || "")}</span>
-                                </div>
-                              </div>
-                              
-                              {task.due_date && (
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm text-muted-foreground">
-                                    Due: {new Date(task.due_date).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="flex gap-2">
-                                <Select
-                                  value={task.status}
-                                  onValueChange={(value) => handleUpdateStatus(task.id, value)}
-                                >
-                                  <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="pending">
-                                      <div className="flex items-center gap-2">
-                                        <Clock className="h-3 w-3" />
-                                        Pending
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="in_progress">
-                                      <div className="flex items-center gap-2">
-                                        <AlertCircle className="h-3 w-3" />
-                                        In Progress
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="completed">
-                                      <div className="flex items-center gap-2">
-                                        <CheckCircle className="h-3 w-3" />
-                                        Completed
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="cancelled">
-                                      <div className="flex items-center gap-2">
-                                        <XCircle className="h-3 w-3" />
-                                        Cancelled
-                                      </div>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeleteTask(task.id)}
-                                  className="text-destructive hover:text-destructive"
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -1358,6 +1464,7 @@ export default function TaskManagerPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </SidebarProvider>
   );
 }

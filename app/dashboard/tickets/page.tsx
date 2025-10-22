@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,7 +37,8 @@ import {
   Edit,
   Trash2,
   GripVertical,
-  Settings
+  Settings,
+  ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
@@ -98,7 +101,17 @@ export default function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
   const [timeFilter, setTimeFilter] = useState<string[]>([]);
-  const [isCustomizeColumnsOpen, setIsCustomizeColumnsOpen] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    ticketNumber: true,
+    company: true,
+    client: true,
+    issue: true,
+    status: true,
+    priority: true,
+    assignedTo: true,
+    created: true,
+    actions: true
+  });
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [showKanban, setShowKanban] = useState(false);
@@ -654,67 +667,116 @@ export default function TicketsPage() {
                     Raise New Ticket
                   </Button>
 
-                  <Select value={statusFilter.length > 0 ? statusFilter.join(",") : "all"} onValueChange={(value) => {
-                    if (value === "all") {
-                      setStatusFilter([]);
-                    } else {
-                      setStatusFilter(value.split(","));
-                    }
-                  }}>
-                    <SelectTrigger className="w-40 h-10">
-                      <SelectValue placeholder="All Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="New">New</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Escalated">Escalated</SelectItem>
-                      <SelectItem value="Resolved">Resolved</SelectItem>
-                      <SelectItem value="New,In Progress">New + In Progress</SelectItem>
-                      <SelectItem value="Escalated,Resolved">Escalated + Resolved</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Status Filter */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-40 h-10 justify-between">
+                        {statusFilter.length === 0 ? "All Status" : 
+                         statusFilter.length === 1 ? statusFilter[0] : 
+                         `${statusFilter.length} Status`}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                        Select Status
+                      </div>
+                      <div className="space-y-1">
+                        {["New", "In Progress", "Escalated", "Resolved"].map(status => (
+                          <div key={status} className="flex items-center space-x-2 px-2 py-1.5">
+                            <Checkbox
+                              id={`status-${status}`}
+                              checked={statusFilter.includes(status)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setStatusFilter(prev => [...prev, status]);
+                                } else {
+                                  setStatusFilter(prev => prev.filter(s => s !== status));
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`status-${status}`} className="text-sm cursor-pointer">
+                              {status}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
-                  <Select value={priorityFilter.length > 0 ? priorityFilter.join(",") : "all"} onValueChange={(value) => {
-                    if (value === "all") {
-                      setPriorityFilter([]);
-                    } else {
-                      setPriorityFilter(value.split(","));
-                    }
-                  }}>
-                    <SelectTrigger className="w-40 h-10">
-                      <SelectValue placeholder="All Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Priority</SelectItem>
-                      <SelectItem value="Low">Low</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="High">High</SelectItem>
-                      <SelectItem value="Critical">Critical</SelectItem>
-                      <SelectItem value="High,Critical">High + Critical</SelectItem>
-                      <SelectItem value="Low,Medium">Low + Medium</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Priority Filter */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-40 h-10 justify-between">
+                        {priorityFilter.length === 0 ? "All Priority" : 
+                         priorityFilter.length === 1 ? priorityFilter[0] : 
+                         `${priorityFilter.length} Priority`}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                        Select Priority
+                      </div>
+                      <div className="space-y-1">
+                        {["Low", "Medium", "High", "Critical"].map(priority => (
+                          <div key={priority} className="flex items-center space-x-2 px-2 py-1.5">
+                            <Checkbox
+                              id={`priority-${priority}`}
+                              checked={priorityFilter.includes(priority)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setPriorityFilter(prev => [...prev, priority]);
+                                } else {
+                                  setPriorityFilter(prev => prev.filter(p => p !== priority));
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`priority-${priority}`} className="text-sm cursor-pointer">
+                              {priority}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
-                  <Select value={timeFilter.length > 0 ? timeFilter.join(",") : "all"} onValueChange={(value) => {
-                    if (value === "all") {
-                      setTimeFilter([]);
-                    } else {
-                      setTimeFilter(value.split(","));
-                    }
-                  }}>
-                    <SelectTrigger className="w-40 h-10">
-                      <SelectValue placeholder="All Time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Time</SelectItem>
-                      <SelectItem value="Today">Today</SelectItem>
-                      <SelectItem value="This Week">This Week</SelectItem>
-                      <SelectItem value="This Month">This Month</SelectItem>
-                      <SelectItem value="Today,This Week">Today + This Week</SelectItem>
-                      <SelectItem value="This Week,This Month">This Week + This Month</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Time Filter */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-40 h-10 justify-between">
+                        {timeFilter.length === 0 ? "All Time" : 
+                         timeFilter.length === 1 ? timeFilter[0] : 
+                         `${timeFilter.length} Time`}
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56">
+                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                        Select Time Range
+                      </div>
+                      <div className="space-y-1">
+                        {["Today", "This Week", "This Month"].map(time => (
+                          <div key={time} className="flex items-center space-x-2 px-2 py-1.5">
+                            <Checkbox
+                              id={`time-${time}`}
+                              checked={timeFilter.includes(time)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setTimeFilter(prev => [...prev, time]);
+                                } else {
+                                  setTimeFilter(prev => prev.filter(t => t !== time));
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`time-${time}`} className="text-sm cursor-pointer">
+                              {time}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
                   {/* View Toggle Buttons */}
                   <div className="flex items-center gap-1 border rounded-md p-1">
@@ -738,16 +800,113 @@ export default function TicketsPage() {
                     </Button>
                   </div>
 
-                  {/* Customize Columns Button */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsCustomizeColumnsOpen(true)}
-                    className="h-10"
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Customize Columns
-                  </Button>
+                  {/* Customize Columns Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="h-10">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Customize Columns
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
+                        Show/Hide Columns
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-ticket-number"
+                            checked={visibleColumns.ticketNumber}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, ticketNumber: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-ticket-number" className="text-sm cursor-pointer">Ticket #</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-company"
+                            checked={visibleColumns.company}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, company: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-company" className="text-sm cursor-pointer">Company</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-client"
+                            checked={visibleColumns.client}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, client: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-client" className="text-sm cursor-pointer">Client</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-issue"
+                            checked={visibleColumns.issue}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, issue: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-issue" className="text-sm cursor-pointer">Issue</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-status"
+                            checked={visibleColumns.status}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, status: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-status" className="text-sm cursor-pointer">Status</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-priority"
+                            checked={visibleColumns.priority}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, priority: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-priority" className="text-sm cursor-pointer">Priority</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-assigned-to"
+                            checked={visibleColumns.assignedTo}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, assignedTo: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-assigned-to" className="text-sm cursor-pointer">Assigned To</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-created"
+                            checked={visibleColumns.created}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, created: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-created" className="text-sm cursor-pointer">Created</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 px-2 py-1.5">
+                          <Checkbox
+                            id="dropdown-actions"
+                            checked={visibleColumns.actions}
+                            onCheckedChange={(checked) => 
+                              setVisibleColumns(prev => ({ ...prev, actions: !!checked }))
+                            }
+                          />
+                          <Label htmlFor="dropdown-actions" className="text-sm cursor-pointer">Actions</Label>
+                        </div>
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
@@ -976,87 +1135,105 @@ export default function TicketsPage() {
                         </colgroup>
                         <TableHeader>
                           <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("ticket_number")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Ticket #
-                                {getSortIcon("ticket_number")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("company")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Company
-                                {getSortIcon("company")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("client_name")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Client
-                                {getSortIcon("client_name")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("issue")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Issue
-                                {getSortIcon("issue")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("status")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Status
-                                {getSortIcon("status")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("priority")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Priority
-                                {getSortIcon("priority")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("assigned_to")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Assigned To
-                                {getSortIcon("assigned_to")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
-                              <Button
-                                variant="ghost"
-                                onClick={() => handleSort("created_at")}
-                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-                              >
-                                Created
-                                {getSortIcon("created_at")}
-                              </Button>
-                            </TableHead>
-                            <TableHead className="text-xs font-semibold text-foreground px-3 py-3">Actions</TableHead>
+                            {visibleColumns.ticketNumber && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("ticket_number")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Ticket #
+                                  {getSortIcon("ticket_number")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.company && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("company")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Company
+                                  {getSortIcon("company")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.client && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("client_name")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Client
+                                  {getSortIcon("client_name")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.issue && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("issue")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Issue
+                                  {getSortIcon("issue")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.status && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("status")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Status
+                                  {getSortIcon("status")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.priority && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("priority")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Priority
+                                  {getSortIcon("priority")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.assignedTo && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("assigned_to")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Assigned To
+                                  {getSortIcon("assigned_to")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.created && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => handleSort("created_at")}
+                                  className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                                >
+                                  Created
+                                  {getSortIcon("created_at")}
+                                </Button>
+                              </TableHead>
+                            )}
+                            {visibleColumns.actions && (
+                              <TableHead className="text-xs font-semibold text-foreground px-3 py-3">Actions</TableHead>
+                            )}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1069,48 +1246,65 @@ export default function TicketsPage() {
                                 setIsDetailsDialogOpen(true);
                               }}
                             >
-                              <TableCell className="py-3 px-3">
-                                <span className="text-sm font-medium text-muted-foreground">
-                                  #{ticket.ticket_number}
-                                </span>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <div className="font-semibold text-sm">{ticket.company}</div>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <div className="text-sm truncate" title={ticket.client_name}>{ticket.client_name}</div>
-                                <div className="text-xs text-muted-foreground truncate" title={ticket.client_email}>{ticket.client_email}</div>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <div className="text-sm truncate" title={ticket.issue}>
-                                  {ticket.issue}
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <Badge className={getStatusColor(ticket.status)}>
-                                  {ticket.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-xs ${
-                                    ticket.priority === 'Critical' ? 'border-red-500 text-red-700' :
-                                    ticket.priority === 'High' ? 'border-orange-500 text-orange-700' :
-                                    ticket.priority === 'Medium' ? 'border-yellow-500 text-yellow-700' :
-                                    'border-green-500 text-green-700'
-                                  }`}
-                                >
-                                  {ticket.priority}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <div className="text-sm">{ticket.assigned_to}</div>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
-                                <div className="text-sm">{formatDate(ticket.created_at)}</div>
-                              </TableCell>
-                              <TableCell className="py-3 px-3">
+                              {visibleColumns.ticketNumber && (
+                                <TableCell className="py-3 px-3">
+                                  <span className="text-sm font-medium text-muted-foreground">
+                                    #{ticket.ticket_number}
+                                  </span>
+                                </TableCell>
+                              )}
+                              {visibleColumns.company && (
+                                <TableCell className="py-3 px-3">
+                                  <div className="font-semibold text-sm">{ticket.company}</div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.client && (
+                                <TableCell className="py-3 px-3">
+                                  <div className="text-sm truncate" title={ticket.client_name}>{ticket.client_name}</div>
+                                  <div className="text-xs text-muted-foreground truncate" title={ticket.client_email}>{ticket.client_email}</div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.issue && (
+                                <TableCell className="py-3 px-3">
+                                  <div className="text-sm truncate" title={ticket.issue}>
+                                    {ticket.issue}
+                                  </div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.status && (
+                                <TableCell className="py-3 px-3">
+                                  <Badge className={getStatusColor(ticket.status)}>
+                                    {ticket.status}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {visibleColumns.priority && (
+                                <TableCell className="py-3 px-3">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ${
+                                      ticket.priority === 'Critical' ? 'border-red-500 text-red-700' :
+                                      ticket.priority === 'High' ? 'border-orange-500 text-orange-700' :
+                                      ticket.priority === 'Medium' ? 'border-yellow-500 text-yellow-700' :
+                                      'border-green-500 text-green-700'
+                                    }`}
+                                  >
+                                    {ticket.priority}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {visibleColumns.assignedTo && (
+                                <TableCell className="py-3 px-3">
+                                  <div className="text-sm">{ticket.assigned_to}</div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.created && (
+                                <TableCell className="py-3 px-3">
+                                  <div className="text-sm">{formatDate(ticket.created_at)}</div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.actions && (
+                                <TableCell className="py-3 px-3">
                                 <div className="flex items-center gap-2">
                                   <Button
                                     variant="outline"
@@ -1153,7 +1347,8 @@ export default function TicketsPage() {
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
-                              </TableCell>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1496,68 +1691,6 @@ export default function TicketsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Customize Columns Dialog */}
-        <Dialog open={isCustomizeColumnsOpen} onOpenChange={setIsCustomizeColumnsOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Customize Columns</DialogTitle>
-              <DialogDescription>
-                Choose which columns to display in the table view.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Available Columns</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="ticket-number" defaultChecked className="rounded" />
-                    <Label htmlFor="ticket-number" className="text-sm">Ticket #</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="company" defaultChecked className="rounded" />
-                    <Label htmlFor="company" className="text-sm">Company</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="client" defaultChecked className="rounded" />
-                    <Label htmlFor="client" className="text-sm">Client</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="issue" defaultChecked className="rounded" />
-                    <Label htmlFor="issue" className="text-sm">Issue</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="status" defaultChecked className="rounded" />
-                    <Label htmlFor="status" className="text-sm">Status</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="priority" defaultChecked className="rounded" />
-                    <Label htmlFor="priority" className="text-sm">Priority</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="assigned-to" defaultChecked className="rounded" />
-                    <Label htmlFor="assigned-to" className="text-sm">Assigned To</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="created" defaultChecked className="rounded" />
-                    <Label htmlFor="created" className="text-sm">Created</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input type="checkbox" id="actions" defaultChecked className="rounded" />
-                    <Label htmlFor="actions" className="text-sm">Actions</Label>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCustomizeColumnsOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => setIsCustomizeColumnsOpen(false)}>
-                Apply Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </SidebarInset>
     </SidebarProvider>
   );

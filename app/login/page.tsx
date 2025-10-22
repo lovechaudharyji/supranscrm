@@ -192,6 +192,7 @@ export default function LoginPage() {
                   <p><strong>Demo Mode</strong> - Test the application without authentication</p>
                   <p className="text-xs">• Admin Demo: View admin dashboard</p>
                   <p className="text-xs">• Employee Demo: View employee dashboard</p>
+                  <p className="text-xs">• HR Demo: View HR attendance management</p>
                 </div>
                 
                 <div className="space-y-2">
@@ -211,8 +212,19 @@ export default function LoginPage() {
                       window.location.href = "/employee";
                     }} 
                     className="w-full"
+                    variant="outline"
                   >
                     Enter as Employee
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      console.log("Redirecting to HR dashboard");
+                      window.location.href = "/dashboard/attendance/hr";
+                    }} 
+                    className="w-full"
+                    variant="default"
+                  >
+                    Enter as HR
                   </Button>
                 </div>
 

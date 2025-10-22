@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SiteHeader } from "@/components/site-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,12 +55,10 @@ export default function AccountsAttendancePage() {
           date,
           status,
           punctuality_status,
-          employee:Employee Directory!inner(
-            employee_id,
-            full_name,
-            department,
-            profile_photo
-          )
+          employee_id,
+          employee_name,
+          department,
+          profile_photo
         `)
         .order("date", { ascending: false });
 
@@ -67,10 +68,10 @@ export default function AccountsAttendancePage() {
         date: record.date,
         status: record.status,
         punctuality_status: record.punctuality_status,
-        employee_id_from_employee: record.employee?.employee_id || "",
-        full_name_from_employee: record.employee?.full_name || "",
-        department_name_from_employee: record.employee?.department || "",
-        profile_photo: record.employee?.profile_photo || null
+        employee_id_from_employee: record.employee_id || "",
+        full_name_from_employee: record.employee_name || "",
+        department_name_from_employee: record.department || "",
+        profile_photo: record.profile_photo || null
       })) || [];
 
       setAttendanceData(formattedData);
@@ -173,11 +174,21 @@ export default function AccountsAttendancePage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-800">Attendance - Accounts Portal</h1>
-        <p className="text-slate-500 mt-1">View monthly employee attendance summaries for salary processing.</p>
-      </div>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <div className="flex flex-col h-screen">
+          {/* Header */}
+          <SiteHeader title="Attendance" />
+
+          {/* Main Content */}
+          <div className="flex flex-col overflow-hidden flex-1">
+            <div className="px-4 pt-4 pb-4">
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-800">Attendance - Accounts Portal</h1>
+                  <p className="text-slate-500 mt-1">View monthly employee attendance summaries for salary processing.</p>
+                </div>
 
       {/* Month Selection */}
       <Card>
@@ -284,7 +295,12 @@ export default function AccountsAttendancePage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
