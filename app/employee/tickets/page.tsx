@@ -26,10 +26,17 @@ import {
   ArrowDown,
   Grid3X3,
   List,
-  Table
+  Table,
+  Settings
 } from "lucide-react";
+import { Table as TableComponent, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useSensor, useSensors, useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Ticket {
   id: string;
@@ -83,6 +90,20 @@ export default function EmployeeTicketsPage() {
     escalated: 0,
     resolved: 0
   });
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
+  const [showColumnPopover, setShowColumnPopover] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    ticket: true,
+    company: true,
+    client: true,
+    status: true,
+    priority: true,
+    created: true,
+    actions: true
+  });
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [newTicket, setNewTicket] = useState({
     client_name: "",
@@ -411,10 +432,51 @@ export default function EmployeeTicketsPage() {
     return matchesSearch;
   });
 
+  // Sort tickets
+  const sortedTickets = [...filteredTickets].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case "ticket_number":
+        aValue = a.ticket_number;
+        bValue = b.ticket_number;
+        break;
+      case "company":
+        aValue = a.company?.toLowerCase() || "";
+        bValue = b.company?.toLowerCase() || "";
+        break;
+      case "client_name":
+        aValue = a.client_name?.toLowerCase() || "";
+        bValue = b.client_name?.toLowerCase() || "";
+        break;
+      case "status":
+        aValue = a.status?.toLowerCase() || "";
+        bValue = b.status?.toLowerCase() || "";
+        break;
+      case "priority":
+        aValue = a.priority?.toLowerCase() || "";
+        bValue = b.priority?.toLowerCase() || "";
+        break;
+      case "created_at":
+        aValue = a.created_at ? new Date(a.created_at).getTime() : 0;
+        bValue = b.created_at ? new Date(b.created_at).getTime() : 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
   // Pagination logic
-  const totalCount = filteredTickets.length;
+  const totalCount = sortedTickets.length;
   const totalPages = Math.ceil(totalCount / pageSize);
-  const paginatedTickets = filteredTickets.slice(
+  const paginatedTickets = sortedTickets.slice(
     pageIndex * pageSize,
     (pageIndex + 1) * pageSize
   );
@@ -454,67 +516,230 @@ export default function EmployeeTicketsPage() {
     });
   };
 
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortDirection(null);
+        setSortColumn(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-50" />;
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="ml-1 h-3 w-3 inline" />;
+    }
+    if (sortDirection === "desc") {
+      return <ArrowDown className="ml-1 h-3 w-3 inline" />;
+    }
+    return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-50" />;
+  };
+
+  const toggleColumn = (column: string) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
+
+  const resetColumns = () => {
+    setVisibleColumns({
+      ticket: true,
+      company: true,
+      client: true,
+      status: true,
+      priority: true,
+      created: true,
+      actions: true
+    });
+  };
+
+  // Drag and Drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const ticket = filteredTickets.find(t => t.id === active.id);
+    setActiveTicket(ticket || null);
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTicket(null);
+    setIsDragging(false);
+
+    if (!over || !active) return;
+
+    const ticketId = active.id as string;
+    const newStatus = over.id as string;
+
+    // Find the ticket
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket || ticket.status === newStatus) return;
+
+    // Update ticket status
+    try {
+      const { error } = await supabase
+        .from("tickets")
+        .update({ 
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", ticketId);
+
+      if (error) throw error;
+
+      // Add history entry
+      await supabase
+        .from("ticket_history")
+        .insert({
+          ticket_id: ticketId,
+          user_name: "Employee",
+          action: `Ticket status changed to ${newStatus} via drag and drop.`
+        });
+
+      toast.success(`Ticket status updated to ${newStatus}`);
+      loadTickets();
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+      toast.error("Failed to update ticket status");
+    }
+  };
+
+  // Draggable Ticket Component
+  const DraggableTicket = ({ ticket }: { ticket: Ticket }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: ticket.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    return (
+      <Card
+        ref={setNodeRef}
+        style={style}
+        className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)} bg-gradient-to-t from-primary/5 to-card shadow-xs ${
+          isDragging ? 'opacity-50' : ''
+        }`}
+        onClick={() => {
+          loadTicketDetails(ticket.id);
+          setIsDetailsDialogOpen(true);
+        }}
+        {...attributes}
+        {...listeners}
+      >
+        <CardContent className="p-3">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">#{ticket.ticket_number}</span>
+              <Badge variant="outline" className="text-xs">
+                {ticket.priority}
+              </Badge>
+            </div>
+            <h4 className="text-sm font-medium line-clamp-1 text-foreground">{ticket.company}</h4>
+            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issue}</p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{ticket.client_name}</span>
+              <span>{formatDate(ticket.created_at)}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // Droppable Column Component
+  const DroppableColumn = ({ status, children }: { status: string; children: React.ReactNode }) => {
+    const { isOver, setNodeRef } = useDroppable({
+      id: status,
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`space-y-3 min-h-[200px] p-2 rounded-lg transition-colors ${
+          isOver ? 'bg-primary/10 border-2 border-primary border-dashed' : ''
+        }`}
+      >
+        {children}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div>
-          <h1 className="text-2xl font-bold">Ticket Management</h1>
-          <p className="text-muted-foreground">Manage support tickets and queries</p>
-        </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Raise New Ticket
-        </Button>
-      </div>
 
       {/* Main Content */}
       <div className="flex flex-col overflow-hidden flex-1">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4">
-          <Card>
+          <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">New</CardTitle>
               <AlertCircle className="h-4 w-4 text-blue-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.new}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.new}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">In Progress</CardTitle>
               <Clock className="h-4 w-4 text-yellow-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{stats.inProgress}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.inProgress}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Escalated</CardTitle>
               <AlertCircle className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{stats.escalated}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.escalated}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Resolved</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.resolved}</div>
+              <div className="text-2xl font-bold text-foreground">{stats.resolved}</div>
             </CardContent>
           </Card>
         </div>
@@ -569,6 +794,100 @@ export default function EmployeeTicketsPage() {
                 </SelectContent>
               </Select>
 
+              <Button onClick={() => setIsCreateDialogOpen(true)} className="h-10">
+                <Plus className="h-4 w-4 mr-2" />
+                Raise New Ticket
+              </Button>
+
+              {/* Custom Columns */}
+              <Popover open={showColumnPopover} onOpenChange={setShowColumnPopover}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="h-10">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Columns
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56" align="end">
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="ticket"
+                          checked={visibleColumns.ticket}
+                          onCheckedChange={() => toggleColumn("ticket")}
+                        />
+                        <label htmlFor="ticket" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Ticket
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="company"
+                          checked={visibleColumns.company}
+                          onCheckedChange={() => toggleColumn("company")}
+                        />
+                        <label htmlFor="company" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Company
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="client"
+                          checked={visibleColumns.client}
+                          onCheckedChange={() => toggleColumn("client")}
+                        />
+                        <label htmlFor="client" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Client
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="status"
+                          checked={visibleColumns.status}
+                          onCheckedChange={() => toggleColumn("status")}
+                        />
+                        <label htmlFor="status" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Status
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="priority"
+                          checked={visibleColumns.priority}
+                          onCheckedChange={() => toggleColumn("priority")}
+                        />
+                        <label htmlFor="priority" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Priority
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="created"
+                          checked={visibleColumns.created}
+                          onCheckedChange={() => toggleColumn("created")}
+                        />
+                        <label htmlFor="created" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Created
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="actions"
+                          checked={visibleColumns.actions}
+                          onCheckedChange={() => toggleColumn("actions")}
+                        />
+                        <label htmlFor="actions" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Actions
+                        </label>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={resetColumns} className="w-full">
+                      Reset All
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               {/* View Toggle Buttons */}
               <div className="flex items-center gap-1 border rounded-md p-1">
                 <Button
@@ -612,136 +931,97 @@ export default function EmployeeTicketsPage() {
               </div>
             ) : paginatedTickets.length > 0 ? (
               viewMode === 'kanban' ? (
-                // Kanban View
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* New Column */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                      <h3 className="font-semibold text-blue-700">New ({filteredTickets.filter(t => t.status === 'New').length})</h3>
+                // Kanban View with Drag and Drop
+                <DndContext
+                  sensors={sensors}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* New Column */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 bg-gradient-to-br from-muted/50 to-background border border-border/50 rounded-lg">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <h3 className="text-sm font-medium text-foreground">New ({filteredTickets.filter(t => t.status === 'New').length})</h3>
+                      </div>
+                      <SortableContext items={filteredTickets.filter(t => t.status === 'New').map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <DroppableColumn status="New">
+                          {filteredTickets.filter(t => t.status === 'New').map(ticket => (
+                            <DraggableTicket key={ticket.id} ticket={ticket} />
+                          ))}
+                        </DroppableColumn>
+                      </SortableContext>
                     </div>
-                    {filteredTickets.filter(t => t.status === 'New').map(ticket => (
-                      <Card key={ticket.id} className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)}`}
-                            onClick={() => {
-                              loadTicketDetails(ticket.id);
-                              setIsDetailsDialogOpen(true);
-                            }}>
-                        <CardContent className="p-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">#{ticket.ticket_number}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {ticket.priority}
-                              </Badge>
-                            </div>
-                            <h4 className="font-semibold text-sm line-clamp-1">{ticket.company}</h4>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issue}</p>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{ticket.client_name}</span>
-                              <span>{formatDate(ticket.created_at)}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+
+                    {/* In Progress Column */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 bg-gradient-to-br from-muted/50 to-background border border-border/50 rounded-lg">
+                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                        <h3 className="text-sm font-medium text-foreground">In Progress ({filteredTickets.filter(t => t.status === 'In Progress').length})</h3>
+                      </div>
+                      <SortableContext items={filteredTickets.filter(t => t.status === 'In Progress').map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <DroppableColumn status="In Progress">
+                          {filteredTickets.filter(t => t.status === 'In Progress').map(ticket => (
+                            <DraggableTicket key={ticket.id} ticket={ticket} />
+                          ))}
+                        </DroppableColumn>
+                      </SortableContext>
+                    </div>
+
+                    {/* Escalated Column */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 bg-gradient-to-br from-muted/50 to-background border border-border/50 rounded-lg">
+                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                        <h3 className="text-sm font-medium text-foreground">Escalated ({filteredTickets.filter(t => t.status === 'Escalated').length})</h3>
+                      </div>
+                      <SortableContext items={filteredTickets.filter(t => t.status === 'Escalated').map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <DroppableColumn status="Escalated">
+                          {filteredTickets.filter(t => t.status === 'Escalated').map(ticket => (
+                            <DraggableTicket key={ticket.id} ticket={ticket} />
+                          ))}
+                        </DroppableColumn>
+                      </SortableContext>
+                    </div>
+
+                    {/* Resolved Column */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 p-3 bg-gradient-to-br from-muted/50 to-background border border-border/50 rounded-lg">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <h3 className="text-sm font-medium text-foreground">Resolved ({filteredTickets.filter(t => t.status === 'Resolved').length})</h3>
+                      </div>
+                      <SortableContext items={filteredTickets.filter(t => t.status === 'Resolved').map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <DroppableColumn status="Resolved">
+                          {filteredTickets.filter(t => t.status === 'Resolved').map(ticket => (
+                            <DraggableTicket key={ticket.id} ticket={ticket} />
+                          ))}
+                        </DroppableColumn>
+                      </SortableContext>
+                    </div>
                   </div>
 
-                  {/* In Progress Column */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg">
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                      <h3 className="font-semibold text-yellow-700">In Progress ({filteredTickets.filter(t => t.status === 'In Progress').length})</h3>
-                    </div>
-                    {filteredTickets.filter(t => t.status === 'In Progress').map(ticket => (
-                      <Card key={ticket.id} className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)}`}
-                            onClick={() => {
-                              loadTicketDetails(ticket.id);
-                              setIsDetailsDialogOpen(true);
-                            }}>
+                  <DragOverlay>
+                    {activeTicket ? (
+                      <Card className="hover:shadow-md transition-shadow cursor-pointer border-l-4 bg-gradient-to-t from-primary/5 to-card shadow-xs opacity-90">
                         <CardContent className="p-3">
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">#{ticket.ticket_number}</span>
+                              <span className="text-xs text-muted-foreground">#{activeTicket.ticket_number}</span>
                               <Badge variant="outline" className="text-xs">
-                                {ticket.priority}
+                                {activeTicket.priority}
                               </Badge>
                             </div>
-                            <h4 className="font-semibold text-sm line-clamp-1">{ticket.company}</h4>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issue}</p>
+                            <h4 className="text-sm font-medium line-clamp-1 text-foreground">{activeTicket.company}</h4>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{activeTicket.issue}</p>
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{ticket.client_name}</span>
-                              <span>{formatDate(ticket.created_at)}</span>
+                              <span>{activeTicket.client_name}</span>
+                              <span>{formatDate(activeTicket.created_at)}</span>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
-                  </div>
-
-                  {/* Escalated Column */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg">
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <h3 className="font-semibold text-orange-700">Escalated ({filteredTickets.filter(t => t.status === 'Escalated').length})</h3>
-                    </div>
-                    {filteredTickets.filter(t => t.status === 'Escalated').map(ticket => (
-                      <Card key={ticket.id} className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)}`}
-                            onClick={() => {
-                              loadTicketDetails(ticket.id);
-                              setIsDetailsDialogOpen(true);
-                            }}>
-                        <CardContent className="p-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">#{ticket.ticket_number}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {ticket.priority}
-                              </Badge>
-                            </div>
-                            <h4 className="font-semibold text-sm line-clamp-1">{ticket.company}</h4>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issue}</p>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{ticket.client_name}</span>
-                              <span>{formatDate(ticket.created_at)}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-
-                  {/* Resolved Column */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <h3 className="font-semibold text-green-700">Resolved ({filteredTickets.filter(t => t.status === 'Resolved').length})</h3>
-                    </div>
-                    {filteredTickets.filter(t => t.status === 'Resolved').map(ticket => (
-                      <Card key={ticket.id} className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)}`}
-                            onClick={() => {
-                              loadTicketDetails(ticket.id);
-                              setIsDetailsDialogOpen(true);
-                            }}>
-                        <CardContent className="p-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">#{ticket.ticket_number}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {ticket.priority}
-                              </Badge>
-                            </div>
-                            <h4 className="font-semibold text-sm line-clamp-1">{ticket.company}</h4>
-                            <p className="text-xs text-muted-foreground line-clamp-2">{ticket.issue}</p>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{ticket.client_name}</span>
-                              <span>{formatDate(ticket.created_at)}</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
               ) : viewMode === 'list' ? (
                 // List View
                 <div className="space-y-2">
@@ -779,33 +1059,140 @@ export default function EmployeeTicketsPage() {
                 </div>
               ) : (
                 // Table View (default)
-                <div className="space-y-4">
-                  {paginatedTickets.map(ticket => (
-                    <Card key={ticket.id} className={`hover:shadow-md transition-shadow cursor-pointer border-l-4 ${getPriorityColor(ticket.priority)}`}
-                          onClick={() => {
-                            loadTicketDetails(ticket.id);
-                            setIsDetailsDialogOpen(true);
-                          }}>
-                      <CardContent className="p-4">
-                        <div className="flex flex-wrap justify-between items-start">
-                          <div className="flex-1 min-w-[200px] mb-2 md:mb-0">
-                            <p className="text-sm text-muted-foreground">#{ticket.ticket_number}</p>
-                            <h3 className="font-bold text-lg">{ticket.company}</h3>
-                            <p className="text-sm text-muted-foreground">{ticket.client_name}</p>
-                          </div>
-                          <div className="w-full md:w-auto md:flex-1 md:mx-4 mb-2 md:mb-0">
-                            <p className="text-sm font-medium line-clamp-2">{ticket.issue}</p>
-                          </div>
-                          <div className="flex items-center space-x-4">
-                            <Badge className={getStatusColor(ticket.status)}>
-                              {ticket.status}
-                            </Badge>
-                            <div className="text-sm text-muted-foreground">{formatDate(ticket.created_at)}</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                <div className="w-full rounded-md border overflow-hidden flex-1 min-h-0 flex flex-col">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                    <TableComponent className="w-full">
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow className="hover:bg-transparent">
+                          {visibleColumns.ticket && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("ticket_number")}
+                            >
+                              Ticket{getSortIcon("ticket_number")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.company && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("company")}
+                            >
+                              Company{getSortIcon("company")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.client && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("client_name")}
+                            >
+                              Client{getSortIcon("client_name")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.status && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("status")}
+                            >
+                              Status{getSortIcon("status")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.priority && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("priority")}
+                            >
+                              Priority{getSortIcon("priority")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.created && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("created_at")}
+                            >
+                              Created{getSortIcon("created_at")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.actions && (
+                            <TableHead className="h-10 px-3 text-sm font-semibold bg-background">
+                              Actions
+                            </TableHead>
+                          )}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedTickets.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={Object.values(visibleColumns).filter(Boolean).length}
+                              className="text-center py-8 text-xs text-muted-foreground"
+                            >
+                              No tickets found.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          paginatedTickets.map(ticket => (
+                            <TableRow key={ticket.id} className="cursor-pointer hover:bg-muted/50">
+                              {visibleColumns.ticket && (
+                                <TableCell className="px-3 py-3 text-sm">
+                                  #{ticket.ticket_number}
+                                </TableCell>
+                              )}
+                              {visibleColumns.company && (
+                                <TableCell className="px-3 py-3">
+                                  <div>
+                                    <p className="text-sm font-medium">{ticket.company}</p>
+                                    <p className="text-xs text-muted-foreground line-clamp-1">{ticket.issue}</p>
+                                  </div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.client && (
+                                <TableCell className="px-3 py-3 text-sm">
+                                  {ticket.client_name}
+                                </TableCell>
+                              )}
+                              {visibleColumns.status && (
+                                <TableCell className="px-3 py-3">
+                                  <Badge className={getStatusColor(ticket.status)}>
+                                    {ticket.status}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {visibleColumns.priority && (
+                                <TableCell className="px-3 py-3">
+                                  <Badge variant="outline" className="text-xs">
+                                    {ticket.priority}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {visibleColumns.created && (
+                                <TableCell className="px-3 py-3 text-sm">
+                                  {formatDate(ticket.created_at)}
+                                </TableCell>
+                              )}
+                              {visibleColumns.actions && (
+                                <TableCell className="px-3 py-3">
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        loadTicketDetails(ticket.id);
+                                        setIsDetailsDialogOpen(true);
+                                      }}
+                                      className="h-6 w-6 hover:bg-muted flex-shrink-0"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </TableComponent>
+                  </div>
                 </div>
               )
             ) : (

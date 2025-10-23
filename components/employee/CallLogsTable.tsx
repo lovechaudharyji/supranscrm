@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -27,6 +28,15 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Calendar, Download, Columns, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { format } from "date-fns";
 
 interface CallLog {
   whalesync_postgres_id: string;
@@ -50,19 +60,39 @@ type SortColumn = "name" | "mobile" | "service" | "duration" | "date" | "sentime
 type SortDirection = "asc" | "desc" | null;
 
 export function CallLogsTable({ calls }: CallLogsTableProps) {
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [sentimentFilter, setSentimentFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
+  const [columnVisibility, setColumnVisibility] = useState({
+    name: true,
+    mobile: true,
+    service: true,
+    duration: true,
+    date: true,
+    sentiment: true,
+    type: true,
+  });
 
-  // Get unique services for filter
+  // Get unique services and sentiments for filter
   const services = Array.from(
     new Set(
       calls
         .map((call) => call.service || call.leads?.services)
+        .filter(Boolean)
+    )
+  );
+
+  const sentiments = Array.from(
+    new Set(
+      calls
+        .map((call) => call.sentiment)
         .filter(Boolean)
     )
   );
@@ -78,7 +108,12 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
 
     const matchesService = serviceFilter === "all" || service === serviceFilter;
 
-    return matchesSearch && matchesService;
+    const matchesSentiment = sentimentFilter === "all" || call.sentiment === sentimentFilter;
+
+    const matchesDate = !dateFilter || 
+      (call.call_date && new Date(call.call_date).toDateString() === dateFilter.toDateString());
+
+    return matchesSearch && matchesService && matchesSentiment && matchesDate;
   });
 
   // Sort calls
@@ -199,6 +234,49 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
     return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-50" />;
   };
 
+  // Export to CSV function
+  const exportToCSV = () => {
+    const headers = [
+      "Name",
+      "Mobile",
+      "Service",
+      "Duration",
+      "Call Date",
+      "Sentiment",
+      "Call Type"
+    ];
+    
+    const rows = [
+      headers.join(","),
+      ...sortedCalls.map((call) => {
+        const service = call.service || call.leads?.services || "";
+        const duration = call.duration ? `${Math.floor(call.duration / 60)}m ${call.duration % 60}s` : "";
+        const callDate = call.call_date ? new Date(call.call_date).toLocaleDateString() : "";
+        
+        const row = [
+          `"${(call.client_name || "").replace(/"/g, '""')}"`,
+          `"${(call.client_number || "").replace(/"/g, '""')}"`,
+          `"${service.replace(/"/g, '""')}"`,
+          `"${duration}"`,
+          `"${callDate}"`,
+          `"${call.sentiment || ""}"`,
+          `"${call.call_type || ""}"`
+        ];
+        return row.join(",");
+      }),
+    ];
+    
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `call_logs_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="w-full flex flex-col h-full overflow-hidden">
       {/* Filters Bar */}
@@ -230,12 +308,27 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
             </SelectContent>
           </Select>
 
+          {/* Sentiment Filter */}
+          <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
+            <SelectTrigger className="w-[140px] h-9 text-sm">
+              <SelectValue placeholder="All Sentiments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sentiments</SelectItem>
+              {sentiments.map((sentiment) => (
+                <SelectItem key={sentiment} value={sentiment || ""}>
+                  {sentiment}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Date Filter */}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="gap-2 h-9 text-sm">
                 <Calendar className="h-4 w-4" />
-                Filter by date
+                {dateFilter ? format(dateFilter, "MMM dd, yyyy") : "Filter by date"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
@@ -245,81 +338,181 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
                 onSelect={setDateFilter}
                 initialFocus
               />
+              {dateFilter && (
+                <div className="p-3 border-t">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setDateFilter(undefined)}
+                    className="w-full"
+                  >
+                    Clear Filter
+                  </Button>
+                </div>
+              )}
             </PopoverContent>
           </Popover>
 
-          {/* Grid View Toggle */}
-          <Button variant="outline" size="icon" className="h-9 w-9">
+          {/* View Toggle */}
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-9 w-9"
+            onClick={() => setViewMode(viewMode === "table" ? "kanban" : "table")}
+          >
             <LayoutGrid className="h-4 w-4" />
           </Button>
 
           {/* Export */}
-          <Button variant="outline" className="gap-2 h-9 text-sm">
+          <Button 
+            variant="outline" 
+            className="gap-2 h-9 text-sm"
+            onClick={exportToCSV}
+          >
             <Download className="h-4 w-4" />
             Export
           </Button>
 
           {/* Customize Columns */}
-          <Button variant="outline" className="gap-2 h-9 text-sm">
-            <Columns className="h-4 w-4" />
-            Customize Columns
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2 h-9 text-sm">
+                <Columns className="h-4 w-4" />
+                Customize Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.name}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, name: value }))
+                }
+              >
+                Name
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.mobile}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, mobile: value }))
+                }
+              >
+                Mobile
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.service}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, service: value }))
+                }
+              >
+                Service
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.duration}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, duration: value }))
+                }
+              >
+                Duration
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.date}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, date: value }))
+                }
+              >
+                Call Date
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.sentiment}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, sentiment: value }))
+                }
+              >
+                Sentiment
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={columnVisibility.type}
+                onCheckedChange={(value) =>
+                  setColumnVisibility((prev) => ({ ...prev, type: value }))
+                }
+              >
+                Call Type
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       {/* Table */}
-      <div className="w-full rounded-md border flex-1 overflow-auto">
-        <Table>
+      <div className="w-full rounded-md border flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 overflow-auto">
+          <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow className="hover:bg-transparent">
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("name")}
-                >
-                  Name{getSortIcon("name")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("mobile")}
-                >
-                  Mobile{getSortIcon("mobile")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("service")}
-                >
-                  Service{getSortIcon("service")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("duration")}
-                >
-                  Duration{getSortIcon("duration")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("date")}
-                >
-                  Call Date{getSortIcon("date")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("sentiment")}
-                >
-                  Sentiment{getSortIcon("sentiment")}
-                </TableHead>
-                <TableHead 
-                  className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
-                  onClick={() => handleSort("type")}
-                >
-                  Call Type{getSortIcon("type")}
-                </TableHead>
+                {columnVisibility.name && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("name")}
+                  >
+                    Name{getSortIcon("name")}
+                  </TableHead>
+                )}
+                {columnVisibility.mobile && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("mobile")}
+                  >
+                    Mobile{getSortIcon("mobile")}
+                  </TableHead>
+                )}
+                {columnVisibility.service && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("service")}
+                  >
+                    Service{getSortIcon("service")}
+                  </TableHead>
+                )}
+                {columnVisibility.duration && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("duration")}
+                  >
+                    Duration{getSortIcon("duration")}
+                  </TableHead>
+                )}
+                {columnVisibility.date && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("date")}
+                  >
+                    Call Date{getSortIcon("date")}
+                  </TableHead>
+                )}
+                {columnVisibility.sentiment && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("sentiment")}
+                  >
+                    Sentiment{getSortIcon("sentiment")}
+                  </TableHead>
+                )}
+                {columnVisibility.type && (
+                  <TableHead 
+                    className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                    onClick={() => handleSort("type")}
+                  >
+                    Call Type{getSortIcon("type")}
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedCalls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-xs py-8 text-muted-foreground">
+                  <TableCell colSpan={Object.values(columnVisibility).filter(Boolean).length} className="text-center text-xs py-8 text-muted-foreground">
                     No call logs found.
                   </TableCell>
                 </TableRow>
@@ -327,49 +520,68 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
                 paginatedCalls.map((call) => {
                   const service = call.service || call.leads?.services;
                   return (
-                <TableRow key={call.whalesync_postgres_id} className="hover:bg-muted/50">
-                  <TableCell className="px-3 py-3 text-sm font-medium">{call.client_name || "-"}</TableCell>
-                  <TableCell className="px-3 py-3 text-sm whitespace-nowrap">{call.client_number || "-"}</TableCell>
-                  <TableCell className="px-3 py-3">
-                    {service ? (
-                      <Badge variant="outline" className={`${getServiceColor(service)} text-sm px-2 py-1 border`}>
-                        {service}
+                <TableRow 
+                  key={call.whalesync_postgres_id} 
+                  className="hover:bg-muted/50 cursor-pointer"
+                  onClick={() => router.push(`/employee/call-logs/${call.whalesync_postgres_id}`)}
+                >
+                  {columnVisibility.name && (
+                    <TableCell className="px-3 py-3 text-sm font-medium">{call.client_name || "-"}</TableCell>
+                  )}
+                  {columnVisibility.mobile && (
+                    <TableCell className="px-3 py-3 text-sm whitespace-nowrap">{call.client_number || "-"}</TableCell>
+                  )}
+                  {columnVisibility.service && (
+                    <TableCell className="px-3 py-3">
+                      {service ? (
+                        <Badge variant="outline" className={`${getServiceColor(service)} text-sm px-2 py-1 border`}>
+                          {service}
+                        </Badge>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                  )}
+                  {columnVisibility.duration && (
+                    <TableCell className="px-3 py-3 text-sm">{formatDuration(call.duration)}</TableCell>
+                  )}
+                  {columnVisibility.date && (
+                    <TableCell className="px-3 py-3 text-sm whitespace-nowrap">
+                      {call.call_date
+                        ? new Date(call.call_date).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "-"}
+                    </TableCell>
+                  )}
+                  {columnVisibility.sentiment && (
+                    <TableCell className="px-3 py-3">
+                      <Badge className={`${getSentimentBadge(call.sentiment)} text-sm px-2 py-1`}>
+                        {call.sentiment || "-"}
                       </Badge>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell className="px-3 py-3 text-sm">{formatDuration(call.duration)}</TableCell>
-                  <TableCell className="px-3 py-3 text-sm whitespace-nowrap">
-                    {call.call_date
-                      ? new Date(call.call_date).toLocaleString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <Badge className={`${getSentimentBadge(call.sentiment)} text-sm px-2 py-1`}>
-                      {call.sentiment || "-"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-3 py-3">
-                    <Badge className={`${getCallTypeBadge(call.call_type)} text-sm px-2 py-1`}>
-                      {call.call_type || "-"}
-                    </Badge>
-                  </TableCell>
+                    </TableCell>
+                  )}
+                  {columnVisibility.type && (
+                    <TableCell className="px-3 py-3">
+                      <Badge className={`${getCallTypeBadge(call.call_type)} text-sm px-2 py-1`}>
+                        {call.call_type || "-"}
+                      </Badge>
+                    </TableCell>
+                  )}
                 </TableRow>
                   );
                 })
               )}
             </TableBody>
           </Table>
+        </div>
 
-        {/* Pagination */}
-        <div className="flex items-center justify-between border-t px-4 py-3 text-sm bg-background">
+        {/* Pagination - Outside scrollable area */}
+        <div className="flex items-center justify-between border-t px-4 py-3 text-sm bg-background flex-shrink-0">
             <div className="text-muted-foreground">
               Showing {startIndex + 1} to {Math.min(endIndex, sortedCalls.length)} of {sortedCalls.length} calls
             </div>

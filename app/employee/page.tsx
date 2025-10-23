@@ -275,12 +275,12 @@ export default function EmployeeDashboard() {
           <p className="text-sm text-muted-foreground">Welcome back! Here's your overview.</p>
         </div>
 
-        <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 md:grid-cols-2 lg:grid-cols-4">
           {navigationCards.map((card) => {
             const Icon = card.icon;
             return (
               <Link key={card.href} href={card.href}>
-                <Card className="@container/card cursor-pointer transition-all hover:shadow-md">
+                <Card className="@container/card cursor-pointer transition-all hover:shadow-md bg-gradient-to-t from-primary/5 to-card shadow-xs">
                   <CardHeader>
                     <CardDescription className="flex items-center justify-between">
                       <span>{card.title}</span>

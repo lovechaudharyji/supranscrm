@@ -145,9 +145,11 @@ export default function FollowUpLeadsPage() {
         </div>
       </div>
       
-      {/* Table Area - Takes remaining space */}
-      <div className="flex-1 px-4 pb-4">
-        <LeadsTable leads={leads} showFollowUpDate={true} highlightDueToday={true} />
+      {/* Table Area - Fixed height with internal scrolling */}
+      <div className="flex-1 px-4 pb-4 min-h-0">
+        <div className="h-full">
+          <LeadsTable leads={leads} showFollowUpDate={true} highlightDueToday={true} />
+        </div>
       </div>
     </div>
   );

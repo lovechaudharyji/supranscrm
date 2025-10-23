@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Clock, AlertCircle, XCircle, Calendar, GripVertical, Search, Download, LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, CalendarDays, Edit, Save, X, Plus, Share } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, XCircle, Calendar, GripVertical, Search, Download, LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, CalendarDays, Edit, Save, X, Plus, Share, Upload, File, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -48,6 +48,12 @@ interface Task {
   is_overdue?: boolean;
   days_overdue?: number;
   update_count?: number;
+  attachments?: Array<{
+    name: string;
+    path: string;
+    size: number;
+    type: string;
+  }>;
 }
 
 export default function EmployeeTasksPage() {
@@ -65,6 +71,7 @@ export default function EmployeeTasksPage() {
     priority: "medium",
     due_date: "",
   });
+  const [editAttachments, setEditAttachments] = useState<File[]>([]);
   
   // Task assignment states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -76,6 +83,7 @@ export default function EmployeeTasksPage() {
     due_date: "",
     assignee: "",
   });
+  const [createAttachments, setCreateAttachments] = useState<File[]>([]);
   
   // Task sharing states
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
@@ -84,6 +92,7 @@ export default function EmployeeTasksPage() {
     assignee: "",
     message: "",
   });
+  const [shareAttachments, setShareAttachments] = useState<File[]>([]);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -361,6 +370,7 @@ export default function EmployeeTasksPage() {
       due_date: "",
       assignee: "",
     });
+    setCreateAttachments([]);
     setIsCreateDialogOpen(true);
   };
 
@@ -395,6 +405,21 @@ export default function EmployeeTasksPage() {
 
       if (error) throw error;
 
+      // Upload files if any
+      if (createAttachments.length > 0) {
+        const uploadedFiles = await uploadFilesToSupabase(createAttachments, data.id);
+        
+        // Update task with attachments
+        const { error: updateError } = await supabase
+          .from("tasks")
+          .update({ attachments: uploadedFiles })
+          .eq("id", data.id);
+        
+        if (updateError) {
+          console.error("Error updating task with attachments:", updateError);
+        }
+      }
+
       // Add to local state
       setTasks(prevTasks => [data, ...prevTasks]);
 
@@ -406,6 +431,7 @@ export default function EmployeeTasksPage() {
         due_date: "",
         assignee: "",
       });
+      setCreateAttachments([]);
       toast.success("Task created successfully!");
     } catch (error: any) {
       console.error("Error creating task:", error);
@@ -422,6 +448,7 @@ export default function EmployeeTasksPage() {
       due_date: "",
       assignee: "",
     });
+    setCreateAttachments([]);
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -452,6 +479,7 @@ export default function EmployeeTasksPage() {
       assignee: "",
       message: "",
     });
+    setShareAttachments([]);
     setIsShareDialogOpen(true);
   };
 
@@ -484,12 +512,28 @@ export default function EmployeeTasksPage() {
 
       if (error) throw error;
 
+      // Upload files if any
+      if (shareAttachments.length > 0) {
+        const uploadedFiles = await uploadFilesToSupabase(shareAttachments, data.id);
+        
+        // Update task with attachments
+        const { error: updateError } = await supabase
+          .from("tasks")
+          .update({ attachments: uploadedFiles })
+          .eq("id", data.id);
+        
+        if (updateError) {
+          console.error("Error updating shared task with attachments:", updateError);
+        }
+      }
+
       setIsShareDialogOpen(false);
       setSharingTask(null);
       setShareForm({
         assignee: "",
         message: "",
       });
+      setShareAttachments([]);
       toast.success("Task shared successfully!");
     } catch (error: any) {
       console.error("Error sharing task:", error);
@@ -504,6 +548,83 @@ export default function EmployeeTasksPage() {
       assignee: "",
       message: "",
     });
+    setShareAttachments([]);
+  };
+
+  // File upload helper functions
+  const handleFileUpload = (files: FileList | null, setAttachments: (files: File[]) => void) => {
+    if (!files) return;
+    
+    const newFiles = Array.from(files);
+    const validFiles = newFiles.filter(file => {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+        return false;
+      }
+      return true;
+    });
+    
+    setAttachments(prev => [...prev, ...validFiles]);
+    if (validFiles.length > 0) {
+      toast.success(`${validFiles.length} file(s) added successfully!`);
+    }
+  };
+
+  const removeFile = (index: number, setAttachments: (files: File[]) => void) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFilesToSupabase = async (files: File[], taskId: string) => {
+    const uploadedFiles = [];
+    
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${taskId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `task-attachments/${fileName}`;
+        
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+        
+        if (error) throw error;
+        
+        uploadedFiles.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type
+        });
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.message}`);
+      }
+    }
+    
+    return uploadedFiles;
+  };
+
+  const downloadFile = async (file: { name: string; path: string; size: number; type: string }) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(file.path);
+      
+      if (error) throw error;
+      
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Downloaded ${file.name}`);
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      toast.error(`Failed to download ${file.name}: ${error.message}`);
+    }
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -795,14 +916,18 @@ export default function EmployeeTasksPage() {
       <div className="space-y-4">
         {/* Calendar Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">
+              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            </h2>
+            <p className="text-xs text-muted-foreground">Click on tasks to view details</p>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => navigateMonth('prev')}
+              className="bg-background border-muted-foreground/30 text-foreground hover:bg-muted/50 h-8 px-2"
             >
               ←
             </Button>
@@ -810,6 +935,7 @@ export default function EmployeeTasksPage() {
               variant="outline"
               size="sm"
               onClick={() => setCurrentDate(new Date())}
+              className="bg-background border-muted-foreground/30 text-foreground hover:bg-muted/50 h-8 px-2"
             >
               Today
             </Button>
@@ -817,6 +943,7 @@ export default function EmployeeTasksPage() {
               variant="outline"
               size="sm"
               onClick={() => navigateMonth('next')}
+              className="bg-background border-muted-foreground/30 text-foreground hover:bg-muted/50 h-8 px-2"
             >
               →
             </Button>
@@ -824,11 +951,11 @@ export default function EmployeeTasksPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="bg-background border rounded-lg overflow-hidden">
+        <div className="bg-gradient-to-br from-muted/50 to-background border border-border/50 rounded-lg overflow-hidden shadow-sm">
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b">
+          <div className="grid grid-cols-7 border-b border-border/50 bg-muted/30">
             {dayNames.map(day => (
-              <div key={day} className="p-3 text-center font-medium text-sm text-muted-foreground border-r last:border-r-0">
+              <div key={day} className="p-2 text-center font-semibold text-xs text-foreground border-r border-border/30 last:border-r-0">
                 {day}
               </div>
             ))}
@@ -838,7 +965,7 @@ export default function EmployeeTasksPage() {
           <div className="grid grid-cols-7">
             {days.map((date, index) => {
               if (!date) {
-                return <div key={index} className="h-24 border-r border-b last:border-r-0"></div>;
+                return <div key={index} className="h-20 border-r border-b border-border/30 last:border-r-0 bg-muted/20"></div>;
               }
 
               const tasksForDate = getTasksForDate(date);
@@ -848,47 +975,79 @@ export default function EmployeeTasksPage() {
               return (
                 <div
                   key={index}
-                  className={`h-24 border-r border-b last:border-r-0 p-2 ${
-                    isCurrentDay ? 'bg-primary/10' : ''
-                  } ${isOverdueDay ? 'bg-red-50' : ''} hover:bg-muted/50 transition-colors`}
+                  className={`h-20 border-r border-b border-border/30 last:border-r-0 p-2 transition-all duration-200 ${
+                    isCurrentDay ? 'bg-gradient-to-br from-primary/20 to-primary/5' : ''
+                  } ${isOverdueDay ? 'bg-gradient-to-br from-gray-400/40 to-gray-300/30' : ''} hover:bg-muted/30`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm font-medium ${
-                      isCurrentDay ? 'text-primary' : ''
-                    } ${isOverdueDay ? 'text-red-600' : ''}`}>
+                    <span className={`text-xs font-semibold ${
+                      isCurrentDay ? 'text-primary' : 'text-foreground'
+                    } ${isOverdueDay ? 'text-muted-foreground' : ''}`}>
                       {date.getDate()}
                     </span>
                     {tasksForDate.length > 0 && (
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge 
+                        variant="secondary" 
+                        className="text-xs bg-primary/10 text-primary border-primary/20 h-4 px-1"
+                      >
                         {tasksForDate.length}
                       </Badge>
                     )}
                   </div>
                   
-                  <div className="space-y-1">
-                    {tasksForDate.slice(0, 2).map(task => (
+                  <div className="space-y-0.5">
+                    {tasksForDate.slice(0, 1).map(task => (
                       <div
                         key={task.id}
-                        className={`text-xs p-1 rounded truncate cursor-pointer ${
-                          task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                          task.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
+                        onClick={() => handleEditTask(task)}
+                        className={`text-xs p-1 rounded truncate cursor-pointer transition-all duration-200 hover:shadow-sm ${
+                          task.status === 'completed' ? 'bg-gradient-to-r from-green-500/20 to-green-500/10 text-green-700 border border-green-200/50' :
+                          task.status === 'in_progress' ? 'bg-gradient-to-r from-blue-500/20 to-blue-500/10 text-blue-700 border border-blue-200/50' :
+                          task.status === 'pending' ? 'bg-gradient-to-r from-yellow-500/20 to-yellow-500/10 text-yellow-700 border border-yellow-200/50' :
+                          'bg-gradient-to-r from-gray-500/20 to-gray-500/10 text-gray-700 border border-gray-200/50'
                         }`}
-                        title={task.title}
+                        title={`${task.title} - Click to view details`}
                       >
-                        {task.title}
+                        <div className="flex items-center gap-1">
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            task.status === 'completed' ? 'bg-green-500' :
+                            task.status === 'in_progress' ? 'bg-blue-500' :
+                            task.status === 'pending' ? 'bg-yellow-500' :
+                            'bg-gray-500'
+                          }`}></div>
+                          <span className="truncate">{task.title}</span>
+                        </div>
                       </div>
                     ))}
-                    {tasksForDate.length > 2 && (
-                      <div className="text-xs text-muted-foreground">
-                        +{tasksForDate.length - 2} more
+                    {tasksForDate.length > 1 && (
+                      <div className="text-xs text-muted-foreground font-medium">
+                        +{tasksForDate.length - 1} more
                       </div>
                     )}
                   </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Calendar Legend */}
+        <div className="flex items-center justify-center gap-4 p-3 bg-muted/30 rounded-lg border border-border/50">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <span className="text-xs text-foreground">Completed</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+            <span className="text-xs text-foreground">In Progress</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+            <span className="text-xs text-foreground">Pending</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-gray-500"></div>
+            <span className="text-xs text-foreground">Cancelled</span>
           </div>
         </div>
       </div>
@@ -940,6 +1099,38 @@ export default function EmployeeTasksPage() {
               Due: {new Date(task.due_date).toLocaleDateString()}
             </div>
           )}
+          
+          {/* Attachments */}
+          {task.attachments && task.attachments.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Paperclip className="h-3 w-3" />
+                <span>Attachments ({task.attachments.length})</span>
+              </div>
+              <div className="space-y-1">
+                {task.attachments.slice(0, 2).map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadFile(file);
+                    }}
+                    title={`Download ${file.name}`}
+                  >
+                    <File className="h-3 w-3" />
+                    <span className="truncate">{file.name}</span>
+                  </div>
+                ))}
+                {task.attachments.length > 2 && (
+                  <div className="text-xs text-muted-foreground">
+                    +{task.attachments.length - 2} more files
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
           <div className="text-xs text-muted-foreground/60 italic">
             Drag card to move between columns
           </div>
@@ -995,7 +1186,7 @@ export default function EmployeeTasksPage() {
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-2">
               {/* Summary Cards */}
               <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
                 <Card className="@container/card">
@@ -1034,26 +1225,27 @@ export default function EmployeeTasksPage() {
               </div>
 
               {/* Filter Bar */}
-              <div className="flex items-center justify-between gap-2 flex-wrap px-4 lg:px-6">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Search Input */}
-                  <div className="flex-1 min-w-[300px]">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                       <Input
-                         placeholder="Search using Name or Phone"
-                         value={searchTerm}
-                         onChange={(e) => setSearchTerm(e.target.value)}
-                         className="pl-10 bg-background border-muted-foreground/30 focus:border-primary text-foreground"
-                       />
-                    </div>
+              <div className="flex items-center justify-between gap-4 px-4 lg:px-6">
+                {/* Left Side - Search Bar */}
+                <div className="flex-1 max-w-[400px]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search using Name or Phone"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 bg-background border-muted-foreground/30 focus:border-primary text-foreground"
+                    />
                   </div>
-                  
+                </div>
+                
+                {/* Right Side - Filters, Buttons, and View Toggle */}
+                <div className="flex items-center gap-2 flex-wrap">
                   {/* Status Filter */}
-                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                     <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                       <SelectValue placeholder="All Status" />
-                     </SelectTrigger>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
@@ -1064,10 +1256,10 @@ export default function EmployeeTasksPage() {
                   </Select>
                   
                   {/* Priority Filter */}
-                   <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                     <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                       <SelectValue placeholder="All Priority" />
-                     </SelectTrigger>
+                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
+                      <SelectValue placeholder="All Priority" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Priority</SelectItem>
                       <SelectItem value="high">High</SelectItem>
@@ -1077,10 +1269,10 @@ export default function EmployeeTasksPage() {
                   </Select>
                   
                   {/* Date Filter */}
-                   <Select value={dateFilter} onValueChange={setDateFilter}>
-                     <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                       <SelectValue placeholder="All Dates" />
-                     </SelectTrigger>
+                  <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
+                      <SelectValue placeholder="All Dates" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Dates</SelectItem>
                       <SelectItem value="today">Today</SelectItem>
@@ -1091,25 +1283,25 @@ export default function EmployeeTasksPage() {
                   </Select>
                   
                   {/* Create Task Button */}
-                   <Button 
-                     variant="default" 
-                     className="gap-2"
-                     onClick={handleCreateTask}
-                   >
-                     <Plus className="h-4 w-4" />
-                     Create Task
-                   </Button>
-                   
+                  <Button 
+                    variant="default" 
+                    className="gap-2"
+                    onClick={handleCreateTask}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Task
+                  </Button>
+                  
                   {/* Export Button */}
-                   <Button 
-                     variant="outline" 
-                     className="gap-2 bg-background border-muted-foreground/30 text-foreground"
-                     onClick={handleExport}
-                   >
-                     <Download className="h-4 w-4" />
-                     Export
-                   </Button>
-                   
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 bg-background border-muted-foreground/30 text-foreground"
+                    onClick={handleExport}
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                  
                   {/* View Toggle Buttons */}
                   <div className="flex border border-muted-foreground/30 rounded-md overflow-hidden">
                     <Button
@@ -1286,6 +1478,14 @@ export default function EmployeeTasksPage() {
                                  <div className="font-medium text-foreground">{task.title}</div>
                                  {task.description && (
                                    <div className="text-sm text-muted-foreground">{task.description}</div>
+                                 )}
+                                 {task.attachments && task.attachments.length > 0 && (
+                                   <div className="flex items-center gap-1 mt-1">
+                                     <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                     <span className="text-xs text-muted-foreground">
+                                       {task.attachments.length} attachment(s)
+                                     </span>
+                                   </div>
                                  )}
                                </div>
                              </TableCell>
@@ -1503,6 +1703,58 @@ export default function EmployeeTasksPage() {
                 onChange={(e) => setCreateForm({ ...createForm, due_date: e.target.value })}
               />
             </div>
+            
+            {/* File Attachments */}
+            <div className="grid gap-2">
+              <Label>Attachments (Optional)</Label>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.ppt,.pptx"
+                    onChange={(e) => handleFileUpload(e.target.files, setCreateAttachments)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('create-file-input')?.click()}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </Button>
+                </div>
+                
+                {createAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Selected Files:</p>
+                    {createAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(index, setCreateAttachments)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={handleCancelCreate}>
@@ -1554,6 +1806,58 @@ export default function EmployeeTasksPage() {
                 placeholder="Add a message about why you're sharing this task..."
                 rows={3}
               />
+            </div>
+            
+            {/* File Attachments */}
+            <div className="grid gap-2">
+              <Label>Additional Attachments (Optional)</Label>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.ppt,.pptx"
+                    onChange={(e) => handleFileUpload(e.target.files, setShareAttachments)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('share-file-input')?.click()}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </Button>
+                </div>
+                
+                {shareAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Selected Files:</p>
+                    {shareAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(index, setShareAttachments)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             {sharingTask && (
               <div className="p-3 bg-muted/50 rounded-lg">

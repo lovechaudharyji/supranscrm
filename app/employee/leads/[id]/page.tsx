@@ -150,31 +150,31 @@ export default function EmployeeLeadDetailsPage() {
     <div className="h-full overflow-auto">
       <div className="container mx-auto p-6">
         <div className="space-y-6">
-        {/* Back Button */}
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.back()}
-            className="gap-2"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </div>
-
         {/* Lead Header Card */}
         <Card className="bg-gradient-to-t from-primary/5 to-card shadow-sm">
           <CardHeader>
             <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6">
-              <Avatar className="h-20 w-20 border-2 border-border">
-                {lead.assigned_to?.profile_photo && (
-                  <AvatarImage src={lead.assigned_to.profile_photo} alt={lead.name || "Lead"} />
-                )}
-                <AvatarFallback className="text-2xl font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+              <div className="flex flex-col items-center gap-3">
+                {/* Back Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => router.back()}
+                  className="gap-2 self-start"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                
+                <Avatar className="h-20 w-20 border-2 border-border">
+                  {lead.assigned_to?.profile_photo && (
+                    <AvatarImage src={lead.assigned_to.profile_photo} alt={lead.name || "Lead"} />
+                  )}
+                  <AvatarFallback className="text-2xl font-bold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
 
               <div className="flex-1 space-y-3">
                 <div className="flex flex-wrap items-center gap-3">

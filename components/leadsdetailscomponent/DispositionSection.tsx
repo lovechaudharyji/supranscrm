@@ -6,13 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { PhoneCall, PhoneOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -110,8 +103,8 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 1: Reason */}
             {disposeStep === 1 && (
               <div className="space-y-4">
-                <Label>Reason for Not Connecting</Label>
-                <RadioGroup value={disposeReason} onValueChange={setDisposeReason}>
+                <Label className="text-2xl font-bold">Reason for Not Connecting</Label>
+                <RadioGroup value={disposeReason} onValueChange={setDisposeReason} className="flex flex-wrap gap-4">
                   {["Did not pick", "Busy", "User disconnected", "Switch off"].map((reason) => (
                     <div key={reason} className="flex items-center space-x-2">
                       <RadioGroupItem value={reason} id={reason} />
@@ -127,7 +120,7 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 2: Remarks */}
             {disposeStep === 2 && (
               <div className="space-y-4">
-                <Label htmlFor="dispose-remark">Additional Remarks</Label>
+                <Label htmlFor="dispose-remark" className="text-2xl font-bold">Additional Remarks</Label>
                 <Textarea
                   id="dispose-remark"
                   rows={4}
@@ -208,8 +201,8 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 1: Interest Level */}
             {connectedStep === 1 && (
               <div className="space-y-4">
-                <Label>Customer Interest Level</Label>
-                <RadioGroup value={interest} onValueChange={setInterest}>
+                <Label className="text-2xl font-bold">Customer Interest Level</Label>
+                <RadioGroup value={interest} onValueChange={setInterest} className="flex flex-wrap gap-4">
                   {["Very Interested", "Moderately Interested", "Not Interested"].map((opt) => (
                     <div key={opt} className="flex items-center space-x-2">
                       <RadioGroupItem value={opt} id={opt} />
@@ -223,8 +216,8 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 2: Discovery Source */}
             {connectedStep === 2 && (
               <div className="space-y-4">
-                <Label>How did they discover us?</Label>
-                <RadioGroup value={discovery} onValueChange={setDiscovery}>
+                <Label className="text-2xl font-bold">How did they discover us?</Label>
+                <RadioGroup value={discovery} onValueChange={setDiscovery} className="flex flex-wrap gap-4">
                   {["Referral", "Social Media", "Online Search", "Other"].map((opt) => (
                     <div key={opt} className="flex items-center space-x-2">
                       <RadioGroupItem value={opt} id={opt} />
@@ -238,26 +231,28 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 3: Purchase Timeline */}
             {connectedStep === 3 && (
               <div className="space-y-4">
-                <Label htmlFor="timeline">Purchase Timeline</Label>
-                <Select value={purchaseTimeline} onValueChange={setPurchaseTimeline}>
-                  <SelectTrigger id="timeline">
-                    <SelectValue placeholder="Select timeline" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Immediate">Immediate (Within 1 week)</SelectItem>
-                    <SelectItem value="1 Month">Within 1 Month</SelectItem>
-                    <SelectItem value="3 Months">Within 3 Months</SelectItem>
-                    <SelectItem value="6 Months">Within 6 Months</SelectItem>
-                    <SelectItem value="Not Sure">Not Sure</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="timeline" className="text-2xl font-bold">Purchase Timeline</Label>
+                <RadioGroup value={purchaseTimeline} onValueChange={setPurchaseTimeline} className="flex flex-wrap gap-4">
+                  {[
+                    { value: "Immediate", label: "Immediate (Within 1 week)" },
+                    { value: "1 Month", label: "Within 1 Month" },
+                    { value: "3 Months", label: "Within 3 Months" },
+                    { value: "6 Months", label: "Within 6 Months" },
+                    { value: "Not Sure", label: "Not Sure" }
+                  ].map((opt) => (
+                    <div key={opt.value} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt.value} id={opt.value} />
+                      <Label htmlFor={opt.value} className="cursor-pointer">{opt.label}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
             )}
 
             {/* Step 4: WhatsApp Follow-up */}
             {connectedStep === 4 && (
               <div className="space-y-4 text-center">
-                <Label>Send Follow-up Message</Label>
+                <Label className="text-2xl font-bold">Send Follow-up Message</Label>
                 <Button
                   variant="default"
                   className="gap-2"
@@ -279,21 +274,18 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {/* Step 5: Update Stage */}
             {connectedStep === 5 && (
               <div className="space-y-4">
-                <Label htmlFor="stage">Update Lead Stage</Label>
-                <Select value={stageUpdate} onValueChange={setStageUpdate}>
-                  <SelectTrigger id="stage">
-                    <SelectValue placeholder="Select stage" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="New">New</SelectItem>
-                    <SelectItem value="Assigned">Assigned</SelectItem>
-                    <SelectItem value="Contact Attempted">Contact Attempted</SelectItem>
-                    <SelectItem value="Connected">Connected</SelectItem>
-                    <SelectItem value="Qualified">Qualified</SelectItem>
-                    <SelectItem value="Converted">Converted</SelectItem>
-                    <SelectItem value="Closed – Lost">Closed – Lost</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="stage" className="text-2xl font-bold">Update Lead Stage</Label>
+                <RadioGroup value={stageUpdate} onValueChange={setStageUpdate} className="flex flex-wrap gap-4">
+                  {[
+                    "New", "Assigned", "Contact Attempted", "Connected", 
+                    "Qualified", "Converted", "Closed – Lost"
+                  ].map((stage) => (
+                    <div key={stage} className="flex items-center space-x-2">
+                      <RadioGroupItem value={stage} id={stage} />
+                      <Label htmlFor={stage} className="cursor-pointer">{stage}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
             )}
 
@@ -301,8 +293,8 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
             {connectedStep === 6 && (
               <div className="space-y-4">
                 <div>
-                  <Label>Lead Classification</Label>
-                  <RadioGroup value={selectedTag} onValueChange={setSelectedTag} className="mt-2">
+                  <Label className="text-2xl font-bold">Lead Classification</Label>
+                  <RadioGroup value={selectedTag} onValueChange={setSelectedTag} className="mt-2 flex flex-wrap gap-4">
                     {["High Priority", "Long-term", "Enterprise"].map((tag) => (
                       <div key={tag} className="flex items-center space-x-2">
                         <RadioGroupItem value={tag} id={tag} />
@@ -312,7 +304,7 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
                   </RadioGroup>
                 </div>
                 <div>
-                  <Label htmlFor="connected-remark">Call Notes</Label>
+                  <Label htmlFor="connected-remark" className="text-2xl font-bold">Call Notes</Label>
                   <Textarea
                     id="connected-remark"
                     rows={4}

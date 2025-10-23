@@ -16,7 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Calendar, User, Clock, CheckCircle, AlertCircle, XCircle, Grid3X3, Table, CalendarDays, LayoutGrid, Share, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Search, Settings, ChevronDown, DollarSign, Users, TrendingUp } from "lucide-react";
+import { Plus, Calendar, User, Clock, CheckCircle, AlertCircle, XCircle, Grid3X3, Table, CalendarDays, LayoutGrid, Share, X, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Search, Settings, ChevronDown, DollarSign, Users, TrendingUp, Upload, File, Paperclip } from "lucide-react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Table as UITable, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
@@ -36,6 +36,12 @@ interface Task {
   is_overdue?: boolean;
   days_overdue?: number;
   update_count?: number;
+  attachments?: Array<{
+    name: string;
+    path: string;
+    size: number;
+    type: string;
+  }>;
 }
 
 interface Employee {
@@ -63,6 +69,7 @@ export default function TaskManagerPage() {
     due_date: "",
     assignee: "",
   });
+  const [createAttachments, setCreateAttachments] = useState<File[]>([]);
   
   // Task modal states
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -75,6 +82,7 @@ export default function TaskManagerPage() {
     assignee: "",
     message: "",
   });
+  const [shareAttachments, setShareAttachments] = useState<File[]>([]);
 
   // Column customization states
   const [visibleColumns, setVisibleColumns] = useState({
@@ -159,6 +167,21 @@ export default function TaskManagerPage() {
       }
 
       if (data && data.length > 0) {
+        // Upload files if any
+        if (createAttachments.length > 0) {
+          const uploadedFiles = await uploadFilesToSupabase(createAttachments, data[0].id);
+          
+          // Update task with attachments
+          const { error: updateError } = await supabase
+            .from("tasks")
+            .update({ attachments: uploadedFiles })
+            .eq("id", data[0].id);
+          
+          if (updateError) {
+            console.error("Error updating task with attachments:", updateError);
+          }
+        }
+
         setTasks([data[0], ...tasks]);
         setNewTask({
           title: "",
@@ -167,6 +190,7 @@ export default function TaskManagerPage() {
           due_date: "",
           assignee: "",
         });
+        setCreateAttachments([]);
         setIsCreateDialogOpen(false);
         toast.success("Task created successfully");
       }
@@ -263,6 +287,21 @@ export default function TaskManagerPage() {
 
       if (error) throw error;
 
+      // Upload files if any
+      if (shareAttachments.length > 0) {
+        const uploadedFiles = await uploadFilesToSupabase(shareAttachments, data.id);
+        
+        // Update task with attachments
+        const { error: updateError } = await supabase
+          .from("tasks")
+          .update({ attachments: uploadedFiles })
+          .eq("id", data.id);
+        
+        if (updateError) {
+          console.error("Error updating shared task with attachments:", updateError);
+        }
+      }
+
       // Add to local state
       setTasks(prevTasks => [data, ...prevTasks]);
 
@@ -272,6 +311,7 @@ export default function TaskManagerPage() {
         assignee: "",
         message: "",
       });
+      setShareAttachments([]);
       toast.success("Task shared successfully!");
     } catch (error: any) {
       console.error("Error sharing task:", error);
@@ -286,6 +326,83 @@ export default function TaskManagerPage() {
       assignee: "",
       message: "",
     });
+    setShareAttachments([]);
+  };
+
+  // File upload helper functions
+  const handleFileUpload = (files: FileList | null, setAttachments: (files: File[]) => void) => {
+    if (!files) return;
+    
+    const newFiles = Array.from(files);
+    const validFiles = newFiles.filter(file => {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error(`File ${file.name} is too large. Maximum size is 10MB.`);
+        return false;
+      }
+      return true;
+    });
+    
+    setAttachments(prev => [...prev, ...validFiles]);
+    if (validFiles.length > 0) {
+      toast.success(`${validFiles.length} file(s) added successfully!`);
+    }
+  };
+
+  const removeFile = (index: number, setAttachments: (files: File[]) => void) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFilesToSupabase = async (files: File[], taskId: string) => {
+    const uploadedFiles = [];
+    
+    for (const file of files) {
+      try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${taskId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `task-attachments/${fileName}`;
+        
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .upload(filePath, file);
+        
+        if (error) throw error;
+        
+        uploadedFiles.push({
+          name: file.name,
+          path: filePath,
+          size: file.size,
+          type: file.type
+        });
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.message}`);
+      }
+    }
+    
+    return uploadedFiles;
+  };
+
+  const downloadFile = async (file: { name: string; path: string; size: number; type: string }) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .download(file.path);
+      
+      if (error) throw error;
+      
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Downloaded ${file.name}`);
+    } catch (error: any) {
+      console.error('Error downloading file:', error);
+      toast.error(`Failed to download ${file.name}: ${error.message}`);
+    }
   };
 
   const handleDragEnd = async (result: any) => {
@@ -805,6 +922,58 @@ export default function TaskManagerPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                        
+                        {/* File Attachments */}
+                        <div className="grid gap-2">
+                          <Label>Attachments (Optional)</Label>
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="file"
+                                multiple
+                                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.ppt,.pptx"
+                                onChange={(e) => handleFileUpload(e.target.files, setCreateAttachments)}
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('create-file-input')?.click()}
+                                className="gap-2"
+                              >
+                                <Upload className="h-4 w-4" />
+                                Upload
+                              </Button>
+                            </div>
+                            
+                            {createAttachments.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium">Selected Files:</p>
+                                {createAttachments.map((file, index) => (
+                                  <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                                    <div className="flex items-center gap-2">
+                                      <File className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-sm">{file.name}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                      </span>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => removeFile(index, setCreateAttachments)}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -895,6 +1064,37 @@ export default function TaskManagerPage() {
                                                     <span className="text-xs text-muted-foreground">
                                                       {new Date(task.due_date).toLocaleDateString()}
                                                     </span>
+                                                  </div>
+                                                )}
+                                                
+                                                {/* Attachments */}
+                                                {task.attachments && task.attachments.length > 0 && (
+                                                  <div className="space-y-1">
+                                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                      <Paperclip className="h-3 w-3" />
+                                                      <span>Attachments ({task.attachments.length})</span>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                      {task.attachments.slice(0, 2).map((file, index) => (
+                                                        <div
+                                                          key={index}
+                                                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadFile(file);
+                                                          }}
+                                                          title={`Download ${file.name}`}
+                                                        >
+                                                          <File className="h-3 w-3" />
+                                                          <span className="truncate">{file.name}</span>
+                                                        </div>
+                                                      ))}
+                                                      {task.attachments.length > 2 && (
+                                                        <div className="text-xs text-muted-foreground">
+                                                          +{task.attachments.length - 2} more files
+                                                        </div>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 )}
                                                 
@@ -1046,6 +1246,14 @@ export default function TaskManagerPage() {
                                       {task.description && (
                                         <div className="text-xs text-muted-foreground truncate max-w-[200px]" title={task.description}>
                                           {task.description}
+                                        </div>
+                                      )}
+                                      {task.attachments && task.attachments.length > 0 && (
+                                        <div className="flex items-center gap-1 mt-1">
+                                          <Paperclip className="h-3 w-3 text-muted-foreground" />
+                                          <span className="text-xs text-muted-foreground">
+                                            {task.attachments.length} attachment(s)
+                                          </span>
                                         </div>
                                       )}
                                     </div>
@@ -1327,6 +1535,58 @@ export default function TaskManagerPage() {
                 placeholder="Add a message about why you're sharing this task..."
                 rows={3}
               />
+            </div>
+            
+            {/* File Attachments */}
+            <div className="grid gap-2">
+              <Label>Additional Attachments (Optional)</Label>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.ppt,.pptx"
+                    onChange={(e) => handleFileUpload(e.target.files, setShareAttachments)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('share-file-input')?.click()}
+                    className="gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload
+                  </Button>
+                </div>
+                
+                {shareAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Selected Files:</p>
+                    {shareAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <File className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(index, setShareAttachments)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             {sharingTask && (
               <div className="p-3 bg-muted/50 rounded-lg">

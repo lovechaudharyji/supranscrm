@@ -271,20 +271,38 @@ function SubscriptionsPageContent() {
     }
 
     try {
+      // Create subscription-user relationships in the database
+      const userInserts = selectedEmployees.map(userId => ({
+        subscription_id: selectedSubscriptionForShare.id,
+        user_id: userId
+      }));
+
+      const { error: usersError } = await supabase
+        .from("subscription_users")
+        .insert(userInserts);
+
+      if (usersError) {
+        console.error("Error inserting subscription users:", usersError);
+        throw usersError;
+      }
+
+      // Also copy credentials to clipboard for immediate sharing
       const message = `Here are the credentials for ${selectedSubscriptionForShare.subscription_name}:\n\nEmail: ${selectedSubscriptionForShare.credentials?.email}\nPassword: ${selectedSubscriptionForShare.credentials?.password}\n\nPlease keep these secure.`;
       
       // Copy to clipboard
       await navigator.clipboard.writeText(message);
       
-      // You could also send via email or other methods here
-      toast.success(`Credentials shared with ${selectedEmployees.length} employee(s)`);
+      toast.success(`Subscription shared with ${selectedEmployees.length} employee(s). They can now access it in their employee portal.`);
       
       setShareCredentialsOpen(false);
       setSelectedSubscriptionForShare(null);
       setSelectedEmployees([]);
+      
+      // Reload data to show updated user assignments
+      loadData();
     } catch (error) {
       console.error("Error sharing credentials:", error);
-      toast.error("Failed to share credentials");
+      toast.error("Failed to share subscription with employees");
     }
   };
 
@@ -395,8 +413,8 @@ function SubscriptionsPageContent() {
     return matchesSearch && matchesStatus && matchesCategory;
     })
     .sort((a, b) => {
-      let aValue: any = a[sortField as keyof typeof a];
-      let bValue: any = b[sortField as keyof typeof b];
+      let aValue: unknown = a[sortField as keyof typeof a];
+      let bValue: unknown = b[sortField as keyof typeof b];
 
       // Handle different data types
       if (sortField === "created_at" || sortField === "expiry_date") {

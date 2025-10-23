@@ -3,20 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, Phone, ChevronRight, User, Mail, MessageCircle, HardDrive, BookOpen, CheckSquare, FileText, Ticket } from "lucide-react";
+import { Home, Users, Phone, ChevronRight, User, Mail, MessageCircle, HardDrive, BookOpen, CheckSquare, FileText, Ticket, Key, Clock } from "lucide-react";
 import { useState } from "react";
 
+const homeNavItems = [
+  { title: "Mail", href: "#", icon: Mail, action: "popup", url: "https://mail.google.com" },
+  { title: "Chat", href: "#", icon: MessageCircle, action: "popup", url: "https://web.whatsapp.com" },
+  { title: "Drive", href: "#", icon: HardDrive, action: "popup", url: "https://drive.google.com" },
+  { title: "Knowledge", href: "https://notion.so", icon: BookOpen, external: true },
+];
+
 const mainNavItems = [
-  {
-    title: "Home",
-    icon: Home,
-    subItems: [
-      { title: "Mail", href: "#", icon: Mail, action: "popup", url: "https://mail.google.com" },
-      { title: "Chat", href: "#", icon: MessageCircle, action: "popup", url: "https://web.whatsapp.com" },
-      { title: "Drive", href: "#", icon: HardDrive, action: "popup", url: "https://drive.google.com" },
-      { title: "Knowledge", href: "https://notion.so", icon: BookOpen, external: true },
-    ],
-  },
   {
     title: "My Leads",
     icon: Users,
@@ -56,6 +53,20 @@ const mainNavItems = [
       { title: "My Tickets", href: "/employee/tickets" },
     ],
   },
+  {
+    title: "Subscriptions",
+    icon: Key,
+    subItems: [
+      { title: "My Subscriptions", href: "/employee/subscriptions" },
+    ],
+  },
+  {
+    title: "Attendance",
+    icon: Clock,
+    subItems: [
+      { title: "Mark Attendance", href: "/employee/attendance" },
+    ],
+  },
 ];
 
 const secondaryNavItems = [
@@ -68,7 +79,7 @@ const secondaryNavItems = [
 
 export function EmployeeSidebar() {
   const pathname = usePathname();
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Home", "My Leads", "Call Logs", "Tasks", "Documents"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["My Leads", "Call Logs"]);
 
   const toggleExpand = (title: string) => {
     setExpandedItems((prev) =>
@@ -81,12 +92,67 @@ export function EmployeeSidebar() {
       <div className="p-4 border-b">
         <h2 className="text-lg font-semibold">Employee Portal</h2>
       </div>
-      <div className="flex-1 p-4 employee-sidebar-scroll" style={{ minHeight: '400px' }}>
+      <div className="flex-1 px-4 py-2 employee-sidebar-scroll" style={{ minHeight: '400px' }}>
+        {/* Home Navigation - Horizontal Icons Only */}
+        <div className="mb-1">
+          <div className="flex justify-center space-x-2">
+            {homeNavItems.map((item) => {
+              const Icon = item.icon;
+              
+              if (item.external) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                    title={item.title}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </a>
+                );
+              }
+
+              if (item.action === "popup") {
+                return (
+                  <button
+                    key={item.title}
+                    onClick={() => {
+                      window.open(
+                        item.url,
+                        item.title,
+                        "noopener,noreferrer"
+                      );
+                    }}
+                    className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                    title={item.title}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </button>
+                );
+              }
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                  title={item.title}
+                >
+                  <Icon className="h-5 w-5" />
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         <nav className="space-y-1">
         {mainNavItems.map((item) => {
           const Icon = item.icon;
           const isExpanded = expandedItems.includes(item.title);
           const hasSubItems = item.subItems && item.subItems.length > 0;
+          const hasSingleSubItem = item.subItems && item.subItems.length === 1;
 
           return (
             <div key={item.title}>
@@ -96,6 +162,20 @@ export function EmployeeSidebar() {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     pathname === item.href
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.title}
+                </Link>
+              ) : hasSingleSubItem ? (
+                // For items with single sub-item, make it a direct link
+                <Link
+                  href={item.subItems![0].href}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                    pathname === item.subItems![0].href
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted"
                   )}

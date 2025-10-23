@@ -104,8 +104,10 @@ export default function NotConnectedLeadsPage() {
           <Skeleton className="h-32" />
           <Skeleton className="h-32" />
         </div>
-        <div className="flex-1 px-4 pb-4">
-          <Skeleton className="h-full w-full" />
+        <div className="flex-1 px-4 pb-4 min-h-0">
+          <div className="h-full">
+            <Skeleton className="h-full w-full" />
+          </div>
         </div>
       </div>
     );
@@ -134,9 +136,11 @@ export default function NotConnectedLeadsPage() {
         </div>
       </div>
       
-      {/* Table Area - Takes remaining space */}
-      <div className="flex-1 px-4 pb-4">
-        <LeadsTable leads={leads} />
+      {/* Table Area - Fixed height with internal scrolling */}
+      <div className="flex-1 px-4 pb-4 min-h-0">
+        <div className="h-full">
+          <LeadsTable leads={leads} />
+        </div>
       </div>
     </div>
   );

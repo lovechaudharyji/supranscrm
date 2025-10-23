@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
+import { HRSidebar } from "@/components/hr-sidebar";
+import { useUserRole } from "@/contexts/UserRoleContext";
 import { SiteHeader } from "@/components/site-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ interface DepartmentStats {
 }
 
 export default function HRAttendancePage() {
+  const { userRole, isLoading: roleLoading } = useUserRole();
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredData, setFilteredData] = useState<AttendanceRecord[]>([]);
@@ -121,7 +123,7 @@ export default function HRAttendancePage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [viewType, setViewType] = useState<"table" | "kanban">("table");
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isMarkAttendanceOpen, setIsMarkAttendanceOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -391,6 +393,11 @@ export default function HRAttendancePage() {
     setIsDetailsOpen(true);
   };
 
+  const handleEditRecord = (record: AttendanceRecord) => {
+    // Open a modal or navigate to edit the record
+    alert(`Editing attendance record for ${record.employee_name} on ${record.date}`);
+  };
+
   const getMonthlyStats = (employeeId: string, month: number, year: number) => {
     const startDate = new Date(year, month, 1);
     const endDate = new Date(year, month + 1, 0);
@@ -531,26 +538,52 @@ export default function HRAttendancePage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const baseClasses = "px-3 py-1 rounded-none text-sm font-medium";
+    const baseClasses = "px-3 py-1 rounded-full text-sm font-medium";
     switch (status) {
       case 'Present':
-        return <Badge className="bg-green-100 text-green-800 rounded-none px-2 py-0.5 text-xs">Present</Badge>;
+        return <Badge className="bg-green-100 text-green-800 rounded-full px-2 py-0.5 text-xs">Present</Badge>;
       case 'Absent':
-        return <Badge className="bg-red-100 text-red-800 rounded-none px-2 py-0.5 text-xs">Absent</Badge>;
+        return <Badge className="bg-red-100 text-red-800 rounded-full px-2 py-0.5 text-xs">Absent</Badge>;
       case 'Half Day':
-        return <Badge className="bg-yellow-100 text-yellow-800 rounded-none px-2 py-0.5 text-xs">Half Day</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800 rounded-full px-2 py-0.5 text-xs">Half Day</Badge>;
       case 'Holiday':
-        return <Badge className="bg-purple-100 text-purple-800 rounded-none px-2 py-0.5 text-xs">Holiday</Badge>;
+        return <Badge className="bg-purple-100 text-purple-800 rounded-full px-2 py-0.5 text-xs">Holiday</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800 rounded-none px-2 py-0.5 text-xs">{status}</Badge>;
+        return <Badge className="bg-gray-100 text-gray-800 rounded-full px-2 py-0.5 text-xs">{status}</Badge>;
     }
   };
 
 
+  // Check if user is HR
+  if (roleLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (userRole !== 'hr') {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Access Denied</h1>
+          <p className="text-muted-foreground mb-4">You don't have permission to access this page.</p>
+          <Button onClick={() => window.location.href = '/login'}>
+            Go to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
   return (
       <SidebarProvider>
-        <AppSidebar />
+        <HRSidebar />
         <SidebarInset>
           <div className="flex flex-col h-screen" suppressHydrationWarning>
             <SiteHeader title="HR Attendance Management" />
@@ -568,13 +601,13 @@ export default function HRAttendancePage() {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <HRSidebar />
       <SidebarInset className="h-screen">
         <div className="flex flex-col h-screen bg-background text-foreground" suppressHydrationWarning>
           <SiteHeader title="HR Attendance Management" />
           
-          <div className="flex-1 overflow-y-auto bg-background">
-            <div className="p-1 space-y-1 bg-background">
+          <div className="flex-1 flex flex-col bg-background">
+            <div className="p-1 space-y-1 bg-background flex-1 flex flex-col min-h-0">
               {/* KPI Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
                 <Card className="bg-gradient-to-t from-primary/5 to-card dark:bg-card shadow-xs">
@@ -645,9 +678,9 @@ export default function HRAttendancePage() {
                 </TabsList>
 
                 {/* Analytics Tab */}
-                <TabsContent value="analytics" className="space-y-1">
+                <TabsContent value="analytics" className="space-y-0">
                   {/* Action Bar */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap -mt-2">
               <Input
                       placeholder="Search employees..."
                       value={searchTerm}
@@ -841,17 +874,15 @@ export default function HRAttendancePage() {
                     </DropdownMenu>
                   </div>
 
-                  <Card className="rounded-none mt-0">
-                    <CardContent className="p-0">
-                      <div className="space-y-0">
+
                         {/* Table View */}
                         {viewType === "table" && (
-                          <div className="flex flex-col h-full">
+                          <div className="flex flex-col h-[60vh]">
                             <div className="flex-1 overflow-y-auto border rounded-md bg-background">
                               <div className="p-0 -mt-1">
                                 <Table className="rounded-none">
                                   <TableHeader className="rounded-none sticky top-0 bg-background z-10">
-                                    <TableRow className="h-8">
+                                    <TableRow className="h-7">
                                       {visibleColumns.employee && (
                                         <TableHead className="py-2 px-3">
                                           <Button
@@ -964,7 +995,7 @@ export default function HRAttendancePage() {
                   </TableRow>
                 ) : (
                                       paginatedData.map((record) => (
-                                        <TableRow key={record.id} className="h-10">
+                                         <TableRow key={record.id} className="h-9">
                                           {visibleColumns.employee && (
                                             <TableCell className="py-2 px-3">
                           <div>
@@ -985,16 +1016,16 @@ export default function HRAttendancePage() {
                                               <div className="flex gap-2">
                                                 <Button 
                                                   size="sm" 
-                                                  variant="outline"
-                                                  className="rounded-none h-6 w-6 p-0"
+                                                  variant="ghost"
+                                                  className="border-0 h-6 w-6 p-0"
                                                   onClick={() => handleViewRecord(record)}
                                                 >
                                                   <Eye className="h-3 w-3" />
                                                 </Button>
                                                 <Button 
                                                   size="sm" 
-                                                  variant="outline"
-                                                  className="rounded-none h-6 w-6 p-0"
+                                                  variant="ghost"
+                                                  className="border-0 h-6 w-6 p-0"
                                                   onClick={() => handleEditRecord(record)}
                                                 >
                                                   <Edit className="h-3 w-3" />
@@ -1013,8 +1044,24 @@ export default function HRAttendancePage() {
                             {/* Pagination */}
                             {filteredData.length > 0 && (
                               <div className="flex items-center justify-between px-4 py-2 border-t bg-background -mb-2">
-                                <div className="text-sm text-muted-foreground">
-                                  Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+                                <div className="flex items-center gap-4">
+                                  <div className="text-sm text-muted-foreground">
+                                    Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Rows per page:</span>
+                                    <select 
+                                      value={itemsPerPage} 
+                                      onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                      className="px-2 py-1 border rounded text-sm"
+                                    >
+                                      <option value={5}>5</option>
+                                      <option value={10}>10</option>
+                                      <option value={25}>25</option>
+                                      <option value={50}>50</option>
+                                      <option value={100}>100</option>
+                                    </select>
+                                  </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <Button
@@ -1064,7 +1111,7 @@ export default function HRAttendancePage() {
 
                         {/* Kanban View */}
                         {viewType === "kanban" && (
-                          <div className="flex flex-col h-full font-sans">
+                          <div className="flex flex-col h-[60vh] font-sans">
                             <div className="flex-1 overflow-y-auto border rounded-md bg-background">
                               <div className="p-0 -mt-1">
                                 <DragDropContext onDragEnd={handleDragEnd}>
@@ -1403,8 +1450,24 @@ export default function HRAttendancePage() {
                             {/* Pagination for Kanban */}
                             {filteredData.length > 0 && (
                               <div className="flex items-center justify-between px-4 py-2 border-t bg-background -mb-2">
-                                <div className="text-sm text-muted-foreground">
-                                  Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+                                <div className="flex items-center gap-4">
+                                  <div className="text-sm text-muted-foreground">
+                                    Showing {startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} records
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">Rows per page:</span>
+                                    <select 
+                                      value={itemsPerPage} 
+                                      onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                                      className="px-2 py-1 border rounded text-sm"
+                                    >
+                                      <option value={5}>5</option>
+                                      <option value={10}>10</option>
+                                      <option value={25}>25</option>
+                                      <option value={50}>50</option>
+                                      <option value={100}>100</option>
+                                    </select>
+                                  </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                   <Button
@@ -1451,13 +1514,10 @@ export default function HRAttendancePage() {
                             )}
                           </div>
                         )}
-          </div>
-        </CardContent>
-      </Card>
                 </TabsContent>
 
                 {/* Mark Attendance Tab */}
-                <TabsContent value="mark-attendance" className="space-y-4">
+                <TabsContent value="mark-attendance" className="space-y-4 flex-1 flex flex-col min-h-0">
                   <Card className="rounded-none">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
@@ -2139,7 +2199,10 @@ export default function HRAttendancePage() {
             {/* All Employees Ranking */}
             <Card className="rounded-none">
               <CardHeader>
-                <CardTitle className="text-lg">📊 Complete Rankings</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Complete Rankings
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -2183,7 +2246,10 @@ export default function HRAttendancePage() {
             {/* Statistics Summary */}
             <Card className="rounded-none">
               <CardHeader>
-                <CardTitle className="text-lg">📈 Team Statistics</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Team Statistics
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

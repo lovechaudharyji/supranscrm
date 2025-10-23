@@ -31,6 +31,8 @@ function EmployeeLayoutContent({ children }: { children: React.ReactNode }) {
     if (pathname.includes("/tasks")) return "My Tasks";
     if (pathname.includes("/documents")) return "My Documents";
     if (pathname.includes("/tickets")) return "My Tickets";
+    if (pathname.includes("/subscriptions")) return "My Subscriptions";
+    if (pathname.includes("/attendance")) return "Mark Attendance";
     return "Employee Portal";
   };
 
@@ -60,7 +62,7 @@ function EmployeeLayoutContent({ children }: { children: React.ReactNode }) {
           onDesktopSidebarToggle={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
           desktopSidebarOpen={desktopSidebarOpen}
         />
-        <main className="flex-1 overflow-hidden bg-background">
+        <main className="flex-1 overflow-y-auto bg-background">
           {children}
         </main>
       </div>

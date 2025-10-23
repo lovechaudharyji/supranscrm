@@ -1,103 +1,114 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  // In demo mode, just allow everything through
-  const isDemoMode = true; // Set to false for production
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
   
-  if (isDemoMode) {
-    return NextResponse.next()
-  }
-
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
+  // Check for demo mode first
+  const demoRole = req.cookies.get('demo_user_role')?.value || 
+                   req.headers.get('x-demo-role');
+  
+  if (demoRole) {
+    // Allow demo users to access their respective pages
+    if (demoRole === 'hr' && req.nextUrl.pathname.startsWith('/dashboard/attendance/hr')) {
+      return res;
     }
-  )
-
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/employee/demo', '/dashboard', '/employee']
-  const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
-  
-  // Allow root path
-  const isRootPath = request.nextUrl.pathname === '/'
-  
-  // If user is not logged in and trying to access protected route
-  if (!session && !isPublicRoute && !isRootPath) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/login'
-    return NextResponse.redirect(redirectUrl)
+    if (demoRole === 'employee' && req.nextUrl.pathname.startsWith('/employee')) {
+      return res;
+    }
+    if (demoRole === 'admin' && req.nextUrl.pathname.startsWith('/dashboard')) {
+      return res;
+    }
+    if (req.nextUrl.pathname === '/login') {
+      return res;
+    }
   }
 
-  // If user is logged in and trying to access login page, redirect to appropriate dashboard
-  if (session && request.nextUrl.pathname === '/login') {
+  const supabase = createMiddlewareClient({ req, res })
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  // If user is not authenticated, allow access to login page
+  if (!user && req.nextUrl.pathname === '/login') {
+    return res
+  }
+
+  // If user is not authenticated, redirect to login
+  if (!user && req.nextUrl.pathname !== '/login') {
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  // If user is authenticated, check their role and redirect accordingly
+  if (user) {
     try {
+      // Check if user is HR
       const { data: employeeData } = await supabase
-        .from('Employee Directory')
-        .select('whalesync_postgres_id')
-        .eq('official_email', session.user.email)
-        .single()
+        .from("Employee Directory")
+        .select("job_title, department")
+        .eq("official_email", user.email)
+        .single();
 
-      const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = employeeData ? '/employee' : '/dashboard'
-      return NextResponse.redirect(redirectUrl)
+      const isHR = employeeData && (
+        employeeData.job_title?.toLowerCase().includes('hr') || 
+        employeeData.department?.toLowerCase().includes('hr')
+      );
+
+      const isEmployee = employeeData && !isHR;
+
+      // HR users can only access HR attendance pages
+      if (isHR) {
+        if (req.nextUrl.pathname.startsWith('/dashboard/attendance/hr') || 
+            req.nextUrl.pathname === '/login') {
+          return res;
+        } else {
+          // Redirect HR users to their attendance page
+          return NextResponse.redirect(new URL('/dashboard/attendance/hr', req.url));
+        }
+      }
+
+      // Regular employees can only access employee pages
+      if (isEmployee) {
+        if (req.nextUrl.pathname.startsWith('/employee') || 
+            req.nextUrl.pathname === '/login') {
+          return res;
+        } else {
+          // Redirect employees to their dashboard
+          return NextResponse.redirect(new URL('/employee', req.url));
+        }
+      }
+
+      // Admins can access all dashboard pages
+      if (!employeeData) {
+        if (req.nextUrl.pathname.startsWith('/dashboard') || 
+            req.nextUrl.pathname === '/login') {
+          return res;
+        } else {
+          // Redirect admins to dashboard
+          return NextResponse.redirect(new URL('/dashboard', req.url));
+        }
+      }
+
     } catch (error) {
-      console.error('Middleware error:', error)
+      console.error('Middleware error:', error);
+      // If there's an error checking user role, redirect to login
+      return NextResponse.redirect(new URL('/login', req.url))
     }
   }
 
-  return response
+  return res
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 }
-

@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FileText, 
   Image, 
@@ -18,8 +21,12 @@ import {
   ArrowUp,
   ArrowDown,
   Grid3X3,
-  List
+  List,
+  Settings,
+  Check,
+  X
 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -51,6 +58,16 @@ export default function EmployeeDocumentsPage() {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [showKanban, setShowKanban] = useState(true);
+  const [showColumnPopover, setShowColumnPopover] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    document: true,
+    category: true,
+    fileInfo: true,
+    created: true,
+    actions: true
+  });
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   const categories = ["General", "HR", "Finance", "Marketing", "Sales", "Technical", "Legal", "Other"];
 
@@ -135,10 +152,43 @@ export default function EmployeeDocumentsPage() {
     return matchesSearch && matchesCategory;
   });
 
+  // Sort documents
+  const sortedDocuments = [...filteredDocuments].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case "title":
+        aValue = a.title?.toLowerCase() || "";
+        bValue = b.title?.toLowerCase() || "";
+        break;
+      case "category":
+        aValue = a.category?.toLowerCase() || "";
+        bValue = b.category?.toLowerCase() || "";
+        break;
+      case "file_name":
+        aValue = a.file_name?.toLowerCase() || "";
+        bValue = b.file_name?.toLowerCase() || "";
+        break;
+      case "created_at":
+        aValue = a.created_at ? new Date(a.created_at).getTime() : 0;
+        bValue = b.created_at ? new Date(b.created_at).getTime() : 0;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
   // Pagination logic
-  const totalCount = filteredDocuments.length;
+  const totalCount = sortedDocuments.length;
   const totalPages = Math.ceil(totalCount / pageSize);
-  const paginatedDocuments = filteredDocuments.slice(
+  const paginatedDocuments = sortedDocuments.slice(
     pageIndex * pageSize,
     (pageIndex + 1) * pageSize
   );
@@ -191,14 +241,59 @@ export default function EmployeeDocumentsPage() {
     window.open(doc.file_url, '_blank');
   };
 
+  const toggleColumn = (column: keyof typeof visibleColumns) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [column]: !prev[column]
+    }));
+  };
+
+  const resetColumns = () => {
+    setVisibleColumns({
+      document: true,
+      category: true,
+      fileInfo: true,
+      created: true,
+      actions: true
+    });
+  };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortDirection(null);
+        setSortColumn(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-50" />;
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="ml-1 h-3 w-3 inline" />;
+    }
+    if (sortDirection === "desc") {
+      return <ArrowDown className="ml-1 h-3 w-3 inline" />;
+    }
+    return <ArrowUpDown className="ml-1 h-3 w-3 inline opacity-50" />;
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Main Content */}
       <div className="flex flex-col overflow-hidden flex-1">
         {/* Action Bar - Fixed */}
-        <div className="flex flex-col gap-3 px-4 pb-3 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3 flex-shrink-0">
           {/* Search + Filters */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-1">
             <Input
               placeholder="Search documents..."
               value={searchTerm}
@@ -206,42 +301,118 @@ export default function EmployeeDocumentsPage() {
               className="flex-1 min-w-[300px] h-10"
             />
 
-            <div className="flex gap-2 items-center">
-              {/* Category Filter */}
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="h-10 w-40 rounded-md border border-input bg-background text-sm font-medium px-3 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="all">All Categories</option>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-10 w-40">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
                 ))}
-              </select>
-            </div>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
 
-        {/* View Toggle */}
-        <div className="flex items-center gap-2 px-4 pb-3 flex-shrink-0">
-          <Button
-            variant={!showKanban ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowKanban(false)}
-            className="h-8"
-          >
-            <List className="h-4 w-4 mr-2" />
-            Table View
-          </Button>
-          <Button
-            variant={showKanban ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowKanban(true)}
-            className="h-8"
-          >
-            <Grid3X3 className="h-4 w-4 mr-2" />
-            Kanban View
-          </Button>
+          {/* View Toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={!showKanban ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowKanban(false)}
+              className="h-8"
+            >
+              <List className="h-4 w-4 mr-2" />
+              Table View
+            </Button>
+            <Button
+              variant={showKanban ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowKanban(true)}
+              className="h-8"
+            >
+              <Grid3X3 className="h-4 w-4 mr-2" />
+              Kanban View
+            </Button>
+
+            {/* Custom Columns Popover */}
+            <Popover open={showColumnPopover} onOpenChange={setShowColumnPopover}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Columns
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-3">
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="document"
+                      checked={visibleColumns.document}
+                      onCheckedChange={() => toggleColumn('document')}
+                    />
+                    <label htmlFor="document" className="text-sm font-medium">
+                      Document
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="category"
+                      checked={visibleColumns.category}
+                      onCheckedChange={() => toggleColumn('category')}
+                    />
+                    <label htmlFor="category" className="text-sm font-medium">
+                      Category
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="fileInfo"
+                      checked={visibleColumns.fileInfo}
+                      onCheckedChange={() => toggleColumn('fileInfo')}
+                    />
+                    <label htmlFor="fileInfo" className="text-sm font-medium">
+                      File Info
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="created"
+                      checked={visibleColumns.created}
+                      onCheckedChange={() => toggleColumn('created')}
+                    />
+                    <label htmlFor="created" className="text-sm font-medium">
+                      Created
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="actions"
+                      checked={visibleColumns.actions}
+                      onCheckedChange={() => toggleColumn('actions')}
+                    />
+                    <label htmlFor="actions" className="text-sm font-medium">
+                      Actions
+                    </label>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={resetColumns}
+                      className="w-full h-8"
+                    >
+                      Reset All
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
         {/* Documents Grid/Table - Scrollable */}
@@ -311,71 +482,126 @@ export default function EmployeeDocumentsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="sticky top-0 bg-background border-b">
-                      <tr>
-                        <th className="p-4 text-left font-semibold text-sm">Document</th>
-                        <th className="p-4 text-left font-semibold text-sm">Category</th>
-                        <th className="p-4 text-left font-semibold text-sm">File Info</th>
-                        <th className="p-4 text-left font-semibold text-sm">Created</th>
-                        <th className="p-4 text-left font-semibold text-sm">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedDocuments.map(doc => (
-                        <tr key={doc.id} className="border-b hover:bg-muted/50">
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              {getFileIcon(doc.file_type)}
-                              <div>
-                                <p className="font-bold text-sm">{doc.title}</p>
-                                <p className="text-xs text-muted-foreground">{doc.description || "No description"}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge variant="outline" className="text-xs">
-                              {doc.category}
-                            </Badge>
-                          </td>
-                          <td className="p-4">
-                            <div className="text-sm">
-                              <p className="font-medium">{doc.file_name}</p>
-                              <p className="text-xs text-muted-foreground">{formatFileSize(doc.file_size)}</p>
-                            </div>
-                          </td>
-                          <td className="p-4 text-sm">
-                            {new Date(doc.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleView(doc)}
-                                className="h-8 text-xs"
-                              >
-                                <Eye className="h-3 w-3 mr-1" />
-                                View
-                              </Button>
-                              {doc.assignments?.can_download && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDownload(doc)}
-                                  className="h-8 text-xs"
-                                >
-                                  <Download className="h-3 w-3 mr-1" />
-                                  Download
-                                </Button>
+                <div className="w-full rounded-md border overflow-hidden flex-1 min-h-0 flex flex-col">
+                  <div className="flex-1 overflow-auto">
+                    <Table className="w-full">
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow className="hover:bg-transparent">
+                          {visibleColumns.document && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("title")}
+                            >
+                              Document{getSortIcon("title")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.category && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("category")}
+                            >
+                              Category{getSortIcon("category")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.fileInfo && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("file_name")}
+                            >
+                              File Info{getSortIcon("file_name")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.created && (
+                            <TableHead 
+                              className="h-10 px-3 text-sm font-semibold bg-background cursor-pointer select-none hover:bg-muted/50"
+                              onClick={() => handleSort("created_at")}
+                            >
+                              Created{getSortIcon("created_at")}
+                            </TableHead>
+                          )}
+                          {visibleColumns.actions && (
+                            <TableHead className="h-10 px-3 text-sm font-semibold bg-background">
+                              Actions
+                            </TableHead>
+                          )}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedDocuments.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="text-center py-8 text-xs text-muted-foreground"
+                            >
+                              No documents found.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          paginatedDocuments.map(doc => (
+                            <TableRow key={doc.id} className="cursor-pointer hover:bg-muted/50">
+                              {visibleColumns.document && (
+                                <TableCell className="px-3 py-3">
+                                  <div className="flex items-center gap-3">
+                                    {getFileIcon(doc.file_type)}
+                                    <div>
+                                      <p className="font-bold text-sm">{doc.title}</p>
+                                      <p className="text-xs text-muted-foreground">{doc.description || "No description"}</p>
+                                    </div>
+                                  </div>
+                                </TableCell>
                               )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              {visibleColumns.category && (
+                                <TableCell className="px-3 py-3">
+                                  <Badge variant="outline" className="text-xs">
+                                    {doc.category}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {visibleColumns.fileInfo && (
+                                <TableCell className="px-3 py-3">
+                                  <div className="text-sm">
+                                    <p className="font-medium">{doc.file_name}</p>
+                                    <p className="text-xs text-muted-foreground">{formatFileSize(doc.file_size)}</p>
+                                  </div>
+                                </TableCell>
+                              )}
+                              {visibleColumns.created && (
+                                <TableCell className="px-3 py-3 text-sm">
+                                  {new Date(doc.created_at).toLocaleDateString()}
+                                </TableCell>
+                              )}
+                              {visibleColumns.actions && (
+                                <TableCell className="px-3 py-3">
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleView(doc)}
+                                      className="h-8 text-xs"
+                                    >
+                                      <Eye className="h-3 w-3 mr-1" />
+                                      View
+                                    </Button>
+                                    {doc.assignments?.can_download && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleDownload(doc)}
+                                        className="h-8 text-xs"
+                                      >
+                                        <Download className="h-3 w-3 mr-1" />
+                                        Download
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )
             ) : (

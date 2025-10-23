@@ -79,6 +79,7 @@ export default function DocumentsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedEmployeesForAssign, setSelectedEmployeesForAssign] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
@@ -119,6 +120,14 @@ export default function DocumentsPage() {
     loadDocuments();
     loadEmployees();
   }, []);
+
+  // Initialize selected employees when dialog opens
+  useEffect(() => {
+    if (isAssignDialogOpen && selectedDocument) {
+      const currentAssignments = selectedDocument.assignments?.map(a => a.employee?.whalesync_postgres_id).filter(Boolean) || [];
+      setSelectedEmployeesForAssign(currentAssignments);
+    }
+  }, [isAssignDialogOpen, selectedDocument]);
 
   const loadDocuments = async () => {
     try {
@@ -359,19 +368,23 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleAssignDocument = async (documentId: string, employeeIds: string[]) => {
+  const handleAssignDocument = async () => {
+    if (!selectedDocument) return;
+
     try {
       // Remove existing assignments
       await supabase
         .from("document_assignments")
         .delete()
-        .eq("document_id", documentId);
+        .eq("document_id", selectedDocument.id);
 
       // Add new assignments
-      if (employeeIds.length > 0) {
-        const assignments = employeeIds.map(employeeId => ({
-          document_id: documentId,
-          employee_id: employeeId
+      if (selectedEmployeesForAssign.length > 0) {
+        const assignments = selectedEmployeesForAssign.map(employeeId => ({
+          document_id: selectedDocument.id,
+          employee_id: employeeId,
+          can_view: true,
+          can_download: true
         }));
 
         const { error } = await supabase
@@ -383,12 +396,15 @@ export default function DocumentsPage() {
 
       toast.success("Document assignments updated successfully");
       setIsAssignDialogOpen(false);
+      setSelectedDocument(null);
+      setSelectedEmployeesForAssign([]);
       loadDocuments();
     } catch (error) {
       console.error("Error assigning document:", error);
       toast.error("Failed to assign document");
     }
   };
+
 
   const filteredDocuments = documents
     .filter(doc => {
@@ -735,7 +751,7 @@ export default function DocumentsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => window.open(doc.file_url, '_blank')}
-                              className="flex-1 h-8 text-xs"
+                              className="flex-1 h-7 text-xs"
                             >
                               <Eye className="h-3 w-3 mr-1" />
                               View
@@ -753,7 +769,7 @@ export default function DocumentsPage() {
                                 });
                                 setIsEditDialogOpen(true);
                               }}
-                              className="flex-1 h-8 text-xs"
+                              className="flex-1 h-7 text-xs"
                             >
                               <Edit className="h-3 w-3 mr-1" />
                               Edit
@@ -765,7 +781,8 @@ export default function DocumentsPage() {
                                 setSelectedDocument(doc);
                                 setIsAssignDialogOpen(true);
                               }}
-                              className="h-8 w-8 p-0"
+                              className="h-7 w-7 p-0"
+                              title="Assign Document"
                             >
                               <Users className="h-3 w-3" />
                             </Button>
@@ -773,7 +790,8 @@ export default function DocumentsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteDocument(doc.id)}
-                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                              className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                              title="Delete Document"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -937,10 +955,10 @@ export default function DocumentsPage() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => window.open(doc.file_url, '_blank')}
-                                    className="h-8 px-2"
+                                    className="h-7 w-7 p-0"
                                     title="View Document"
                                   >
-                                    <Eye className="h-4 w-4" />
+                                    <Eye className="h-3 w-3" />
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -955,10 +973,10 @@ export default function DocumentsPage() {
                                       });
                                       setIsEditDialogOpen(true);
                                     }}
-                                    className="h-8 px-2"
+                                    className="h-7 w-7 p-0"
                                     title="Edit Document"
                                   >
-                                    <Edit className="h-4 w-4" />
+                                    <Edit className="h-3 w-3" />
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -967,10 +985,19 @@ export default function DocumentsPage() {
                                       setSelectedDocument(doc);
                                       setIsAssignDialogOpen(true);
                                     }}
-                                    className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="h-7 w-7 p-0"
+                                    title="Assign Document"
+                                  >
+                                    <Users className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteDocument(doc.id)}
+                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                                     title="Delete Document"
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-3 w-3" />
                                   </Button>
                                 </div>
                               </TableCell>
@@ -1230,7 +1257,13 @@ export default function DocumentsPage() {
         </Dialog>
 
         {/* Assign Document Dialog */}
-        <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+        <Dialog open={isAssignDialogOpen} onOpenChange={(open) => {
+          setIsAssignDialogOpen(open);
+          if (!open) {
+            setSelectedDocument(null);
+            setSelectedEmployeesForAssign([]);
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Assign Document</DialogTitle>
@@ -1244,9 +1277,13 @@ export default function DocumentsPage() {
                   <div key={employee.whalesync_postgres_id} className="flex items-center space-x-2">
                     <Checkbox
                       id={`assign-${employee.whalesync_postgres_id}`}
-                      checked={selectedDocument?.assignments?.some(a => a.employee?.full_name === employee.full_name) || false}
+                      checked={selectedEmployeesForAssign.includes(employee.whalesync_postgres_id)}
                       onCheckedChange={(checked) => {
-                        // This will be handled in the save function
+                        if (checked) {
+                          setSelectedEmployeesForAssign(prev => [...prev, employee.whalesync_postgres_id]);
+                        } else {
+                          setSelectedEmployeesForAssign(prev => prev.filter(id => id !== employee.whalesync_postgres_id));
+                        }
                       }}
                     />
                     <Label htmlFor={`assign-${employee.whalesync_postgres_id}`} className="text-sm">
@@ -1257,22 +1294,20 @@ export default function DocumentsPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+              <Button variant="outline" onClick={() => {
+                setIsAssignDialogOpen(false);
+                setSelectedDocument(null);
+                setSelectedEmployeesForAssign([]);
+              }}>
                 Cancel
               </Button>
-              <Button onClick={() => {
-                if (selectedDocument) {
-                  const selectedEmployeeIds = employees
-                    .filter(emp => selectedDocument.assignments?.some(a => a.employee?.full_name === emp.full_name))
-                    .map(emp => emp.whalesync_postgres_id);
-                  handleAssignDocument(selectedDocument.id, selectedEmployeeIds);
-                }
-              }}>
+              <Button onClick={handleAssignDocument}>
                 Save Assignments
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
 
       </SidebarInset>
     </SidebarProvider>

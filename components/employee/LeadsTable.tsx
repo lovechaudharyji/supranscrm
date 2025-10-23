@@ -21,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CalendarDays, Mail, MapPin, Phone, Briefcase, Globe, Calendar, Download, LayoutGrid, Columns, ArrowUpDown, ArrowUp, ArrowDown, Eye, Kanban } from "lucide-react";
 import {
   Popover,
@@ -69,7 +68,6 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
   const [searchTerm, setSearchTerm] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [stageFilter, setStageFilter] = useState<string>("all");
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
   const [currentPage, setCurrentPage] = useState(1);
@@ -280,7 +278,7 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
   };
 
   return (
-    <div className="w-full flex flex-col">
+    <div className="w-full h-full flex flex-col">
       {/* Top Filters Bar - Compact */}
       <div className="flex justify-between items-center gap-2 flex-wrap pb-2 flex-shrink-0 bg-background">
           {/* Left Side - Search */}
@@ -453,14 +451,14 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
           </div>
       </div>
 
-      {/* Table - Compact and Responsive */}
-      <div className="w-full rounded-md border overflow-hidden">
+      {/* Table - Fixed height with internal scrolling */}
+      <div className="w-full rounded-md border overflow-hidden flex-1 min-h-0 flex flex-col">
         {viewMode === "kanban" ? (
-          <div className="overflow-auto max-h-[calc(100vh-300px)]">
+          <div className="h-full overflow-auto">
             <LeadKanbanView data={sortedLeads} />
           </div>
         ) : (
-          <div className="overflow-auto max-h-[calc(100vh-300px)]">
+          <div className="flex-1 overflow-auto">
             <Table className="w-full">
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow className="hover:bg-transparent">
@@ -557,7 +555,7 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
                       className={`cursor-pointer hover:bg-muted/50 ${
                         dueToday ? "bg-yellow-50 dark:bg-yellow-900/10" : ""
                       }`}
-                      onClick={() => setSelectedLead(lead)}
+                      onClick={() => router.push(`/employee/leads/${lead.whalesync_postgres_id}`)}
                     >
                       {columnVisibility.date && (
                         <TableCell className="px-3 py-3 text-sm whitespace-nowrap">
@@ -657,200 +655,88 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
           </div>
           )}
 
-        {/* Pagination Footer - Compact */}
-            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm bg-background flex-shrink-0">
-          <div className="text-sm text-muted-foreground">
-            {sortedLeads.length > 0 ? (
-              <>
-                Showing <span className="font-medium text-foreground">{startIndex + 1}</span> to{" "}
-                <span className="font-medium text-foreground">{Math.min(endIndex, sortedLeads.length)}</span> of{" "}
-                <span className="font-medium text-foreground">{sortedLeads.length}</span> leads
-              </>
-            ) : (
-              "No leads found"
-            )}
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">Rows:</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => {
-                  setRowsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="h-8 w-20 rounded-md border border-input bg-background text-sm font-medium px-3 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                {[10, 20, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
+        </div>
 
+      {/* Pagination Footer - Outside scrollable area */}
+      <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm bg-background flex-shrink-0">
+        <div className="text-sm text-muted-foreground">
+          {sortedLeads.length > 0 ? (
+            <>
+              Showing <span className="font-medium text-foreground">{startIndex + 1}</span> to{" "}
+              <span className="font-medium text-foreground">{Math.min(endIndex, sortedLeads.length)}</span> of{" "}
+              <span className="font-medium text-foreground">{sortedLeads.length}</span> leads
+            </>
+          ) : (
+            "No leads found"
+          )}
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Rows:</span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="h-8 w-20 rounded-md border border-input bg-background text-sm font-medium px-3 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            
             <div className="flex items-center gap-1">
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="h-8 px-3 text-sm"
-                >
-                  First
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="h-8 px-3 text-sm"
-                >
-                  Prev
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="h-8 px-3 text-sm"
-                >
-                  Next
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="h-8 px-3 text-sm"
-                >
-                  Last
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="h-8 px-3 text-sm"
+              >
+                First
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="h-8 px-3 text-sm"
+              >
+                Prev
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-8 px-3 text-sm"
+              >
+                Next
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-8 px-3 text-sm"
+              >
+                Last
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Lead Details Drawer */}
-      <Sheet open={!!selectedLead} onOpenChange={() => setSelectedLead(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Lead Details</SheetTitle>
-          </SheetHeader>
-          {selectedLead && (
-            <div className="mt-6 space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Phone className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Name</p>
-                    <p className="font-semibold">{selectedLead.name || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Phone className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Mobile</p>
-                    <p className="font-semibold">{selectedLead.mobile || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Mail className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-semibold">{selectedLead.email || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <MapPin className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">City</p>
-                    <p className="font-semibold">{selectedLead.city || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Briefcase className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Service</p>
-                    <p className="font-semibold">{selectedLead.services || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Globe className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Source</p>
-                    <p className="font-semibold">{selectedLead.source || "N/A"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Stage</p>
-                    <Badge className={getStageColor(selectedLead.stage)}>
-                      {selectedLead.stage || "N/A"}
-                    </Badge>
-                  </div>
-                </div>
-
-                {selectedLead.follow_up_date && (
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <CalendarDays className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Follow-up Date</p>
-                      <p className="font-semibold">
-                        {new Date(selectedLead.follow_up_date).toLocaleDateString("en-GB")}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Created Date</p>
-                    <p className="font-semibold">
-                      {selectedLead.date_and_time
-                        ? new Date(selectedLead.date_and_time).toLocaleDateString("en-GB")
-                        : "N/A"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

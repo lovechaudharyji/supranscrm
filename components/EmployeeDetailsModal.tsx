@@ -38,6 +38,19 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  CheckCircle,
+  AlertTriangle,
+  FileText,
+  DollarSign,
+  Building2,
+  CreditCard,
+  Calendar,
+  Clock,
+  XCircle,
+  BarChart3,
+  PhoneCall,
+  ArrowDownToLine,
+  ArrowUpFromLine,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -118,6 +131,7 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
   const [activeDocTab, setActiveDocTab] = useState("submitted");
   const [addDocModalOpen, setAddDocModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
   const [callsDate, setCallsDate] = useState("");
   const [callsSearch, setCallsSearch] = useState("");
   
@@ -340,6 +354,22 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
   const incomingCalls = calls.filter((c) => c.call_type === "Incoming").length;
   const outgoingCalls = calls.filter((c) => c.call_type === "Outgoing").length;
   const selectedDateRecord = attendance.find((a) => a.date === selectedDate);
+  
+  // Filter attendance by selected month
+  const filteredAttendance = attendance.filter((record) => {
+    const recordDate = new Date(record.date);
+    const recordMonth = recordDate.toISOString().slice(0, 7); // YYYY-MM format
+    return recordMonth === selectedMonth;
+  });
+
+  // Get available months from attendance data
+  const availableMonths = Array.from(new Set(
+    attendance.map(record => {
+      const recordDate = new Date(record.date);
+      return recordDate.toISOString().slice(0, 7); // YYYY-MM format
+    })
+  )).sort().reverse(); // Most recent first
+
   const manager = getManager();
   const directReports = getDirectReports();
 
@@ -347,9 +377,9 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden p-0">
-        <DialogHeader className="px-4 pt-4 pb-3 border-b">
-          <DialogTitle className="text-base">Employee Details</DialogTitle>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle className="text-lg font-semibold">Employee Details</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -358,15 +388,15 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
             <p className="mt-3 text-sm text-muted-foreground">Loading employee details...</p>
           </div>
         ) : (
-          <div className="overflow-hidden h-[calc(85vh-4rem)]">
+          <div className="overflow-hidden h-[calc(90vh-5rem)]">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col">
-              <div className="border-b px-4 sticky top-0 bg-background z-10 flex-shrink-0">
+              <div className="border-b px-6 sticky top-0 bg-background z-10 flex-shrink-0">
                 <TabsList className="bg-transparent h-auto p-0 w-full justify-start overflow-x-auto">
                   {["detail", "document", "payroll", "attendance", "calls"].map((tab) => (
                     <TabsTrigger
                       key={tab}
                       value={tab}
-                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-3 py-2 capitalize text-sm"
+                      className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none bg-transparent px-4 py-3 capitalize text-sm font-medium"
                     >
                       {tab === "calls" ? `Calls (${calls.length})` : tab}
                     </TabsTrigger>
@@ -374,389 +404,675 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
                 </TabsList>
               </div>
 
-              <div className="p-4 overflow-y-auto flex-1">
+              <div className="p-6 overflow-y-auto flex-1">
                 {/* Detail Tab */}
-                <TabsContent value="detail" className="mt-0 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Profile Card */}
-                    <Card className="bg-muted/30">
-                      <CardContent className="p-3 flex flex-col items-center text-center">
-                        <Avatar className="h-16 w-16 mb-2">
-                          <AvatarImage src={employeeData?.profile_photo} alt={employeeData?.full_name} />
-                          <AvatarFallback className="text-xl">{employeeData?.full_name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <h3 className="text-sm font-bold">{employeeData?.full_name}</h3>
-                        <p className="text-xs text-muted-foreground">{employeeData?.official_email}</p>
-                        <div className="mt-1">
-                          <p className="text-xs font-semibold text-primary">{employeeData?.job_title || "N/A"}</p>
-                          <p className="text-xs text-muted-foreground">
-                            ID: {employeeData?.whalesync_postgres_id?.substring(0, 8) || "N/A"}
-                          </p>
+                <TabsContent value="detail" className="mt-0">
+                  {/* Header Section */}
+                  <div className="flex items-start gap-6 mb-6">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={employeeData?.profile_photo} alt={employeeData?.full_name} />
+                      <AvatarFallback className="text-2xl font-semibold">{employeeData?.full_name?.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h2 className="text-2xl font-bold text-foreground">{employeeData?.full_name}</h2>
+                          <p className="text-lg text-muted-foreground">{employeeData?.job_title || "No Position"}</p>
+                          <p className="text-sm text-muted-foreground">{employeeData?.official_email}</p>
                         </div>
-                        <div className="mt-2 grid grid-cols-1 gap-1.5 text-xs w-full">
-                          <Card className="bg-background">
-                            <CardContent className="p-2">
-                              <p className="text-muted-foreground text-xs">Department</p>
-                              <p className="font-semibold text-sm">{getDepartmentName()}</p>
-                            </CardContent>
-                          </Card>
-                          <Card className="bg-background">
-                            <CardContent className="p-2">
-                              <p className="text-muted-foreground text-xs">Joining Date</p>
-                              <p className="font-semibold text-sm">
-                                {employeeData?.date_of_joining
-                                  ? new Date(employeeData.date_of_joining).toLocaleDateString("en-GB", {
-                                      day: "numeric",
-                                      month: "short",
-                                      year: "numeric",
-                                    })
-                                  : "N/A"}
-                              </p>
-                            </CardContent>
-                          </Card>
-                          <Card className="bg-background">
-                            <CardContent className="p-2">
-                              <p className="text-muted-foreground text-xs">Manager</p>
-                              <p className="font-semibold text-sm">{manager?.full_name || "N/A"}</p>
-                            </CardContent>
-                          </Card>
+                        <Button variant="outline" size="sm" className="h-8">
+                          <Edit2 className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-6 mt-4">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            ID: {employeeData?.whalesync_postgres_id?.substring(0, 8)}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {getDepartmentName()}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Information Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Personal Information */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Personal Information</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Phone</span>
+                          <span className="text-sm font-medium">{employeeData?.official_contact_number || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Personal Email</span>
+                          <span className="text-sm font-medium">{employeeData?.personal_email || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Date of Birth</span>
+                          <span className="text-sm font-medium">
+                            {employeeData?.dob ? new Date(employeeData.dob).toLocaleDateString("en-GB") : "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">LinkedIn</span>
+                          {employeeData?.linkedin_profile ? (
+                            <a
+                              href={employeeData.linkedin_profile.startsWith("http") ? employeeData.linkedin_profile : `https://${employeeData.linkedin_profile}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline flex items-center gap-1"
+                            >
+                              <Linkedin className="h-3 w-3" />
+                              Profile
+                            </a>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">N/A</span>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
 
-                    {/* Contact Details & Employment */}
-                    <div className="md:col-span-2 space-y-3">
-                      {/* Contact Details Section */}
-                      <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="text-sm font-semibold">Contact Details</h4>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
+                    {/* Employment Information */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Employment Details</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Department</span>
+                          <span className="text-sm font-medium">{getDepartmentName()}</span>
                         </div>
-                        <div className="space-y-2">
-                          <Card className="bg-muted/30">
-                            <CardContent className="p-2 flex items-center">
-                              <Phone className="h-3.5 w-3.5 text-muted-foreground mr-2" />
-                              <span className="text-xs">{employeeData?.official_contact_number || "N/A"}</span>
-                            </CardContent>
-                          </Card>
-                          {employeeData?.linkedin_profile && (
-                            <Card className="bg-muted/30">
-                              <CardContent className="p-2 flex items-center">
-                                <Linkedin className="h-3.5 w-3.5 text-muted-foreground mr-2" />
-                                <a
-                                  href={employeeData.linkedin_profile.startsWith("http") ? employeeData.linkedin_profile : `https://${employeeData.linkedin_profile}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-primary hover:underline"
-                                >
-                                  View LinkedIn Profile
-                                </a>
-                              </CardContent>
-                            </Card>
-                          )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Position</span>
+                          <span className="text-sm font-medium">{employeeData?.job_title || "N/A"}</span>
                         </div>
-                      </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Joining Date</span>
+                          <span className="text-sm font-medium">
+                            {employeeData?.date_of_joining
+                              ? new Date(employeeData.date_of_joining).toLocaleDateString("en-GB")
+                              : "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Employment Type</span>
+                          <span className="text-sm font-medium">{employeeData?.employment_type || "N/A"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Work Mode</span>
+                          <span className="text-sm font-medium">{employeeData?.work_mode || "N/A"}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                      {/* Employment Details Section */}
-                      <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="text-sm font-semibold">Employment Details</h4>
+                    {/* Management Information */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Management</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Manager</span>
+                          <span className="text-sm font-medium">{manager?.full_name || "No Manager"}</span>
                         </div>
-                        <div className="space-y-2">
-                          <Card className="bg-muted/30">
-                            <CardContent className="p-2 flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Position</span>
-                              <div className="flex items-center space-x-2">
-                                <Badge variant="secondary" className="text-xs">{employeeData?.employment_type || "N/A"}</Badge>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="bg-muted/30">
-                            <CardContent className="p-2 flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Manager</span>
-                              <div className="flex items-center space-x-2">
-                                {manager && (
-                                  <>
-                                    <Avatar className="h-6 w-6">
-                                      <AvatarImage src={manager.profile_photo} alt={manager.full_name} />
-                                      <AvatarFallback className="text-xs">{manager.full_name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="text-xs font-medium">{manager.full_name}</span>
-                                  </>
-                                )}
-                                {!manager && <span className="text-xs text-muted-foreground">No manager assigned</span>}
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-
-                          <Card className="bg-muted/30">
-                            <CardContent className="p-2 flex items-center justify-between">
-                              <span className="text-xs text-muted-foreground">Direct Reports</span>
-                              <div className="flex items-center space-x-2">
-                                <div className="flex -space-x-1.5">
-                                  {directReports.slice(0, 4).map((report) => (
-                                    <Avatar key={report.whalesync_postgres_id} className="h-6 w-6 border-2 border-background">
-                                      <AvatarImage src={report.profile_photo} alt={report.full_name} />
-                                      <AvatarFallback className="text-xs">{report.full_name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                  ))}
-                                  {directReports.length > 4 && (
-                                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold border-2 border-background">
-                                      +{directReports.length - 4}
-                                    </div>
-                                  )}
-                                </div>
-                                {directReports.length === 0 && <span className="text-xs text-muted-foreground">No direct reports</span>}
-                              </div>
-                            </CardContent>
-                          </Card>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Direct Reports</span>
+                          <span className="text-sm font-medium">{directReports.length} employees</span>
                         </div>
-                      </div>
-                    </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Status</span>
+                          <Badge variant={employeeData?.status === "Active" ? "default" : "secondary"} className="text-xs">
+                            {employeeData?.status || "Unknown"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Monthly Payroll</span>
+                          <span className="text-sm font-medium">
+                            {employeeData?.monthly_payroll ? `₹${employeeData.monthly_payroll.toLocaleString()}` : "N/A"}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </TabsContent>
 
                 {/* Document Tab */}
-                <TabsContent value="document" className="mt-0 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-semibold">Documents</h3>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant={activeDocTab === "submitted" ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs h-7"
-                        onClick={() => setActiveDocTab("submitted")}
-                      >
-                        Submitted
-                      </Button>
-                      <Button
-                        variant={activeDocTab === "not-submitted" ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs h-7"
-                        onClick={() => setActiveDocTab("not-submitted")}
-                      >
-                        Not Submitted
-                      </Button>
-                      <Button onClick={() => setAddDocModalOpen(true)} size="sm" className="text-xs h-7">
-                        Add Document
-                      </Button>
+                <TabsContent value="document" className="mt-0">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h3 className="text-lg font-semibold">Document Management</h3>
+                      <p className="text-sm text-muted-foreground">Manage employee documents and submissions</p>
                     </div>
+                    <Button onClick={() => setAddDocModalOpen(true)} className="h-9">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Document
+                    </Button>
                   </div>
 
+                  {/* Document Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Documents</p>
+                            <p className="text-2xl font-bold text-foreground">{documents.length}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 text-sm font-semibold">{documents.length}</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Submitted</p>
+                            <p className="text-2xl font-bold text-foreground">{submittedDocs.length}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Pending</p>
+                            <p className="text-2xl font-bold text-foreground">{notSubmittedDocs.length}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Document Filter Tabs */}
+                  <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit mb-6">
+                    <Button
+                      variant={activeDocTab === "submitted" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8"
+                      onClick={() => setActiveDocTab("submitted")}
+                    >
+                      Submitted ({submittedDocs.length})
+                    </Button>
+                    <Button
+                      variant={activeDocTab === "not-submitted" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8"
+                      onClick={() => setActiveDocTab("not-submitted")}
+                    >
+                      Pending ({notSubmittedDocs.length})
+                    </Button>
+                  </div>
+
+                  {/* Document List */}
                   {activeDocTab === "submitted" ? (
-                    <div className="mt-4">
-                      <Card>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Document Name</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Issued Date</TableHead>
-                              <TableHead>Action</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {submittedDocs.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={4} className="text-center text-muted-foreground">
-                                  No submitted documents found.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              submittedDocs.map((doc) => (
-                                <TableRow key={doc.whalesync_postgres_id}>
-                                  <TableCell className="font-medium">{doc.document_name}</TableCell>
-                                  <TableCell>{doc.document_type || "N/A"}</TableCell>
-                                  <TableCell>
-                                    {doc.issued_date ? new Date(doc.issued_date).toLocaleDateString() : "N/A"}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center space-x-2">
-                                      {doc.attachment ? (
-                                        <>
-                                          <Button variant="link" size="sm" asChild>
-                                            <a href={doc.attachment} target="_blank" rel="noopener noreferrer">
-                                              <ExternalLink className="h-4 w-4 mr-1" />
-                                              View
-                                            </a>
-                                          </Button>
-                                          <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8"
-                                            onClick={() => handleDownloadDocument(doc.attachment!, doc.document_name)}
-                                          >
-                                            <Download className="h-4 w-4" />
-                                          </Button>
-                                        </>
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground">N/A</span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Card>
+                    <div className="space-y-3">
+                      {submittedDocs.length === 0 ? (
+                        <Card>
+                          <CardContent className="p-8 text-center">
+                            <div className="text-muted-foreground">
+                              <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                                <FileText className="h-6 w-6" />
+                              </div>
+                              <p className="text-lg font-medium">No submitted documents</p>
+                              <p className="text-sm">All documents are pending submission</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        submittedDocs.map((doc) => (
+                          <Card key={doc.whalesync_postgres_id} className="hover:shadow-md transition-shadow">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium">{doc.document_name}</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      {doc.document_type || "General Document"} • 
+                                      {doc.issued_date ? new Date(doc.issued_date).toLocaleDateString() : "No date"}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  {doc.attachment ? (
+                                    <>
+                                      <Button variant="outline" size="sm" asChild>
+                                        <a href={doc.attachment} target="_blank" rel="noopener noreferrer">
+                                          <ExternalLink className="h-4 w-4 mr-1" />
+                                          View
+                                        </a>
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => handleDownloadDocument(doc.attachment!, doc.document_name)}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">No attachment</span>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
                     </div>
                   ) : (
-                    <div className="mt-4">
-                      <Card>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Document Name</TableHead>
-                              <TableHead>Type</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {notSubmittedDocs.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={2} className="text-center text-muted-foreground">
-                                  No pending documents.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              notSubmittedDocs.map((doc) => (
-                                <TableRow key={doc.whalesync_postgres_id}>
-                                  <TableCell className="font-medium">{doc.document_name}</TableCell>
-                                  <TableCell>{doc.document_type || "N/A"}</TableCell>
-                                </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </Card>
+                    <div className="space-y-3">
+                      {notSubmittedDocs.length === 0 ? (
+                        <Card>
+                          <CardContent className="p-8 text-center">
+                            <div className="text-muted-foreground">
+                              <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+                                <CheckCircle className="h-8 w-8 text-green-600" />
+                              </div>
+                              <p className="text-lg font-medium">All documents submitted</p>
+                              <p className="text-sm">Great job! All required documents are complete</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        notSubmittedDocs.map((doc) => (
+                          <Card key={doc.whalesync_postgres_id} className="border-orange-200 bg-orange-50/50">
+                            <CardContent className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                  <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-medium">{doc.document_name}</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      {doc.document_type || "General Document"} • Pending submission
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                  Pending
+                                </Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
                     </div>
                   )}
                 </TabsContent>
 
                 {/* Payroll Tab */}
-                <TabsContent value="payroll" className="mt-0 space-y-3">
-                  <Card className="bg-muted/30">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Current Payroll Details</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <p className="text-muted-foreground">Current Salary</p>
-                          <p className="font-bold">
-                            {employeeData?.monthly_payroll
-                              ? `$${Number(employeeData.monthly_payroll).toLocaleString()}`
-                              : "N/A"}
-                          </p>
+                <TabsContent value="payroll" className="mt-0">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Payroll Information</h3>
+                    <p className="text-sm text-muted-foreground">Current salary details and payment history</p>
+                  </div>
+
+                  {/* Payroll Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Monthly Salary</p>
+                            <p className="text-2xl font-bold text-foreground">
+                              {employeeData?.monthly_payroll
+                                ? `₹${Number(employeeData.monthly_payroll).toLocaleString()}`
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 text-sm font-semibold">₹</span>
+                          </div>
                         </div>
-                        {employeeData?.bank_details && (
-                          <>
-                            <div>
-                              <p className="text-muted-foreground">Bank Name</p>
-                              <p className="font-bold">
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Annual Salary</p>
+                            <p className="text-xl font-bold text-foreground">
+                              {employeeData?.monthly_payroll
+                                ? `₹${(Number(employeeData.monthly_payroll) * 12).toLocaleString()}`
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <BarChart3 className="h-4 w-4 text-blue-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Bank</p>
+                            <p className="text-sm font-medium text-foreground">
+                              {employeeData?.bank_details 
+                                ? employeeData.bank_details.split("\n").find((l) => l.includes("Bank Name"))?.split("-")[1]?.trim() || "N/A"
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                            <Building2 className="h-4 w-4 text-purple-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Account</p>
+                            <p className="text-sm font-medium text-foreground">
+                              {employeeData?.bank_details 
+                                ? employeeData.bank_details.split("\n").find((l) => l.includes("Account No"))?.split("-")[1]?.trim() || "N/A"
+                                : "N/A"}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center">
+                            <CreditCard className="h-4 w-4 text-orange-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Bank Details */}
+                  {employeeData?.bank_details && (
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <CardTitle className="text-base">Banking Information</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Bank Name</span>
+                              <span className="text-sm font-medium">
                                 {employeeData.bank_details.split("\n").find((l) => l.includes("Bank Name"))?.split("-")[1]?.trim() || "N/A"}
-                              </p>
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-muted-foreground">Bank Account Number</p>
-                              <p className="font-bold">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Account Number</span>
+                              <span className="text-sm font-medium font-mono">
                                 {employeeData.bank_details.split("\n").find((l) => l.includes("Account No"))?.split("-")[1]?.trim() || "N/A"}
-                              </p>
+                              </span>
                             </div>
-                            <div>
-                              <p className="text-muted-foreground">IFSC Code</p>
-                              <p className="font-bold">
+                          </div>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">IFSC Code</span>
+                              <span className="text-sm font-medium font-mono">
                                 {employeeData.bank_details.split("\n").find((l) => l.includes("IFSC Code"))?.split("-")[1]?.trim() || "N/A"}
-                              </p>
+                              </span>
                             </div>
-                          </>
-                        )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Account Type</span>
+                              <span className="text-sm font-medium">Salary Account</span>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Payment History</h3>
+                    <Button variant="outline" size="sm">
+                      Export Records
+                    </Button>
+                  </div>
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <div className="text-muted-foreground">
+                        <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                          <DollarSign className="h-6 w-6" />
+                        </div>
+                        <p className="text-lg font-medium">No payment records</p>
+                        <p className="text-sm">Payment history will appear here once transactions are recorded</p>
                       </div>
                     </CardContent>
-                  </Card>
-
-                  <h3 className="text-sm font-semibold">Transactions</h3>
-                  <Card>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Salary For</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground">
-                            There are no transactions right now.
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
                   </Card>
                 </TabsContent>
 
                 {/* Attendance Tab */}
-                <TabsContent value="attendance" className="mt-0 space-y-3">
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">Check Attendance by Date</h3>
-                    <Card className="bg-muted/30">
-                      <CardContent className="p-2 flex items-end space-x-2">
-                        <div>
-                          <Label htmlFor="attendance-date" className="text-xs">
-                            Select a Date
+                <TabsContent value="attendance" className="mt-0">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Attendance Management</h3>
+                    <p className="text-sm text-muted-foreground">Track employee attendance and working hours</p>
+                  </div>
+
+                  {/* Attendance Summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Days</p>
+                            <p className="text-2xl font-bold">{filteredAttendance.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {attendance.length > 0 && `(${attendance.length} total)`}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Calendar className="h-4 w-4 text-blue-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Present</p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {filteredAttendance.filter(a => a.status === 'Present').length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {attendance.length > 0 && `(${attendance.filter(a => a.status === 'Present').length} total)`}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Late</p>
+                            <p className="text-2xl font-bold text-yellow-600">
+                              {filteredAttendance.filter(a => a.status === 'Late').length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {attendance.length > 0 && `(${attendance.filter(a => a.status === 'Late').length} total)`}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                            <Clock className="h-4 w-4 text-yellow-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Absent</p>
+                            <p className="text-2xl font-bold text-red-600">
+                              {filteredAttendance.filter(a => a.status === 'Absent').length}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {attendance.length > 0 && `(${attendance.filter(a => a.status === 'Absent').length} total)`}
+                            </p>
+                          </div>
+                          <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Date Selector */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle className="text-base">Check Attendance by Date</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-1">
+                          <Label htmlFor="attendance-date" className="text-sm font-medium">
+                            Select Date
                           </Label>
                           <Input
                             id="attendance-date"
                             type="date"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            className="text-xs h-8"
+                            className="mt-1"
                           />
                         </div>
-                        <div className="flex-grow">
+                        <div className="flex-1">
                           {selectedDateRecord ? (
-                            <p className="text-xs font-medium">
-                              Status on {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" })}: {getStatusBadge(selectedDateRecord.status)}
-                            </p>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-muted-foreground">Status:</span>
+                              {getStatusBadge(selectedDateRecord.status)}
+                            </div>
                           ) : (
-                            <p className="text-sm font-medium text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               No record for {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" })}
                             </p>
                           )}
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Month Filter */}
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle className="text-base">Filter by Month</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-1">
+                          <Label htmlFor="month-filter" className="text-sm font-medium">
+                            Select Month
+                          </Label>
+                          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select month" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableMonths.length > 0 ? (
+                                availableMonths.map((month) => {
+                                  const date = new Date(month + '-01');
+                                  const monthName = date.toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'long' 
+                                  });
+                                  return (
+                                    <SelectItem key={month} value={month}>
+                                      {monthName}
+                                    </SelectItem>
+                                  );
+                                })
+                              ) : (
+                                <SelectItem value={selectedMonth}>
+                                  {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'long' 
+                                  })}
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm text-muted-foreground">
+                            <p className="font-medium">Records for selected month: {filteredAttendance.length}</p>
+                            <p className="text-xs">
+                              {new Date(selectedMonth + '-01').toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'long' 
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Attendance History</h3>
+                    <Button variant="outline" size="sm">
+                      Export Records
+                    </Button>
                   </div>
 
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">Attendance Log</h3>
-                    <Card className="max-h-48 overflow-y-auto">
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-background">
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {attendance.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-0">
+                      {filteredAttendance.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <div className="text-muted-foreground">
+                            <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                              <BarChart3 className="h-6 w-6" />
+                            </div>
+                            <p className="text-lg font-medium">
+                              {attendance.length === 0 
+                                ? "No attendance records" 
+                                : "No records for selected month"
+                              }
+                            </p>
+                            <p className="text-sm">
+                              {attendance.length === 0 
+                                ? "Attendance data will appear here once recorded" 
+                                : "Try selecting a different month or check if attendance was recorded"
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <Table>
+                          <TableHeader>
                             <TableRow>
-                              <TableCell colSpan={2} className="text-center text-muted-foreground">
-                                No attendance records found.
-                              </TableCell>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Status</TableHead>
                             </TableRow>
-                          ) : (
-                            attendance
+                          </TableHeader>
+                          <TableBody>
+                            {filteredAttendance
                               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                               .map((record, index) => (
                                 <TableRow key={record.id || `${record.date}-${index}`}>
@@ -769,107 +1085,155 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
                                   </TableCell>
                                   <TableCell>{getStatusBadge(record.status)}</TableCell>
                                 </TableRow>
-                              ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </Card>
-                  </div>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
                 {/* Calls Tab */}
-                <TabsContent value="calls" className="mt-0 h-full flex flex-col space-y-2 overflow-hidden">
-                  {/* Compact Metrics Cards */}
-                  <div className="grid grid-cols-3 gap-2 flex-shrink-0">
-                    <Card className="bg-muted/50 border-muted">
-                      <CardContent className="p-1.5 text-center">
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase">Total</p>
-                        <p className="text-lg font-bold">{calls.length}</p>
+                <TabsContent value="calls" className="mt-0">
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold mb-2">Call Management</h3>
+                    <p className="text-sm text-muted-foreground">Track employee call logs and communication history</p>
+                  </div>
+
+                  {/* Call Statistics */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Calls</p>
+                            <p className="text-2xl font-bold text-foreground">{calls.length}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <PhoneCall className="h-4 w-4 text-blue-600" />
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-muted/50 border-muted">
-                      <CardContent className="p-1.5 text-center">
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase">Incoming</p>
-                        <p className="text-lg font-bold">{incomingCalls}</p>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Incoming</p>
+                            <p className="text-2xl font-bold text-foreground">{incomingCalls}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <ArrowDownToLine className="h-4 w-4 text-green-600" />
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-muted/50 border-muted">
-                      <CardContent className="p-1.5 text-center">
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase">Outgoing</p>
-                        <p className="text-lg font-bold">{outgoingCalls}</p>
+
+                    <Card className="bg-gradient-to-t from-primary/5 to-card shadow-xs">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Outgoing</p>
+                            <p className="text-2xl font-bold text-foreground">{outgoingCalls}</p>
+                          </div>
+                          <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                            <ArrowUpFromLine className="h-4 w-4 text-purple-600" />
+                          </div>
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
 
                   {/* Filters */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-shrink-0">
-                    <div>
-                      <Label htmlFor="calls-date" className="text-xs">
-                        Filter by Date
-                      </Label>
-                      <Input id="calls-date" type="date" value={callsDate} onChange={(e) => setCallsDate(e.target.value)} className="text-xs h-8" />
-                    </div>
-                    <div>
-                      <Label htmlFor="calls-search" className="text-xs">
-                        Search by Name or Number
-                      </Label>
-                      <Input
-                        id="calls-search"
-                        type="text"
-                        placeholder="Search..."
-                        value={callsSearch}
-                        onChange={(e) => setCallsSearch(e.target.value)}
-                        className="text-xs h-8"
-                      />
-                    </div>
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle className="text-base">Filter & Search</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="calls-date" className="text-sm font-medium">
+                            Filter by Date
+                          </Label>
+                          <Input 
+                            id="calls-date" 
+                            type="date" 
+                            value={callsDate} 
+                            onChange={(e) => setCallsDate(e.target.value)} 
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="calls-search" className="text-sm font-medium">
+                            Search by Name or Number
+                          </Label>
+                          <Input
+                            id="calls-search"
+                            type="text"
+                            placeholder="Search calls..."
+                            value={callsSearch}
+                            onChange={(e) => setCallsSearch(e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Call History</h3>
+                    <Button variant="outline" size="sm">
+                      Export Logs
+                    </Button>
                   </div>
 
-                  {/* Expanded Call Log Section - Only this scrolls */}
-                  <div className="flex flex-col flex-1 min-h-0">
-                    <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Call Log</h3>
-                    <Card className="flex-1 min-h-0 overflow-hidden flex flex-col">
-                      <div className="overflow-y-auto flex-1">
+                  <Card>
+                    <CardContent className="p-0">
+                      {filteredCalls.length === 0 ? (
+                        <div className="p-8 text-center">
+                          <div className="text-muted-foreground">
+                            <div className="h-12 w-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                              <PhoneCall className="h-6 w-6" />
+                            </div>
+                            <p className="text-lg font-medium">No calls recorded</p>
+                            <p className="text-sm">Call logs will appear here once calls are made</p>
+                          </div>
+                        </div>
+                      ) : (
                         <Table>
-                          <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableHeader>
                             <TableRow>
-                              <TableHead className="text-xs">Time</TableHead>
-                              <TableHead className="text-xs">Client</TableHead>
-                              <TableHead className="text-xs">Type</TableHead>
-                              <TableHead className="text-xs">Duration</TableHead>
+                              <TableHead>Time</TableHead>
+                              <TableHead>Client</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Duration</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {filteredCalls.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={4} className="text-center text-muted-foreground text-xs py-8">
-                                  No calls recorded matching criteria.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              filteredCalls
-                                .sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime())
-                                .map((call) => (
-                                  <TableRow key={call.whalesync_postgres_id} className="cursor-pointer hover:bg-muted/50">
-                                    <TableCell className="font-medium text-xs">
-                                      {new Date(call.call_date).toLocaleTimeString("en-US", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </TableCell>
-                                    <TableCell className="text-xs">
-                                      <div className="font-medium">{call.client_name || "Unknown Client"}</div>
-                                      <div className="text-[10px] text-muted-foreground">{call.client_number || ""}</div>
-                                    </TableCell>
-                                    <TableCell className="text-xs">{getCallTypeBadge(call.call_type)}</TableCell>
-                                    <TableCell className="text-xs">{formatDuration(call.duration)}</TableCell>
-                                  </TableRow>
-                                ))
-                            )}
+                            {filteredCalls
+                              .sort((a, b) => new Date(b.call_date).getTime() - new Date(a.call_date).getTime())
+                              .map((call) => (
+                                <TableRow key={call.whalesync_postgres_id} className="cursor-pointer hover:bg-muted/50">
+                                  <TableCell className="font-medium">
+                                    {new Date(call.call_date).toLocaleTimeString("en-US", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="font-medium">{call.client_name || "Unknown Client"}</div>
+                                    <div className="text-sm text-muted-foreground">{call.client_number || ""}</div>
+                                  </TableCell>
+                                  <TableCell>{getCallTypeBadge(call.call_type)}</TableCell>
+                                  <TableCell>{formatDuration(call.duration)}</TableCell>
+                                </TableRow>
+                              ))}
                           </TableBody>
                         </Table>
-                      </div>
-                    </Card>
-                  </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
               </div>

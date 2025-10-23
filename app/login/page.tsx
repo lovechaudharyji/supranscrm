@@ -51,21 +51,32 @@ export default function LoginPage() {
 
       console.log("User authenticated:", authData.user.email);
 
-      // Check if user is an employee
+      // Check if user is an employee or HR
       const { data: employeeData, error: employeeError } = await supabase
         .from("Employee Directory")
-        .select("whalesync_postgres_id, full_name")
+        .select("whalesync_postgres_id, full_name, job_title, department")
         .eq("official_email", authData.user.email)
         .single();
 
       console.log("Employee check:", { employeeData, employeeError });
 
       if (employeeData) {
-        // User is an employee
-        console.log("Redirecting to employee dashboard");
-        toast.success(`Welcome back, ${employeeData.full_name || "Employee"}!`);
-        setLoading(false);
-        window.location.href = "/employee";
+        // Check if user is HR
+        const isHR = employeeData.job_title?.toLowerCase().includes('hr') || 
+                    employeeData.department?.toLowerCase().includes('hr');
+        
+        if (isHR) {
+          console.log("Redirecting to HR dashboard");
+          toast.success(`Welcome back, ${employeeData.full_name || "HR"}!`);
+          setLoading(false);
+          window.location.href = "/dashboard/attendance/hr";
+        } else {
+          // User is a regular employee
+          console.log("Redirecting to employee dashboard");
+          toast.success(`Welcome back, ${employeeData.full_name || "Employee"}!`);
+          setLoading(false);
+          window.location.href = "/employee";
+        }
       } else {
         // User is admin (not in Employee Directory)
         console.log("Redirecting to admin dashboard");
@@ -199,6 +210,7 @@ export default function LoginPage() {
                   <Button 
                     onClick={() => {
                       console.log("Redirecting to admin dashboard");
+                      document.cookie = 'demo_user_role=admin; path=/; max-age=3600';
                       window.location.href = "/dashboard";
                     }} 
                     className="w-full"
@@ -209,6 +221,7 @@ export default function LoginPage() {
                   <Button 
                     onClick={() => {
                       console.log("Redirecting to employee demo");
+                      document.cookie = 'demo_user_role=employee; path=/; max-age=3600';
                       window.location.href = "/employee";
                     }} 
                     className="w-full"
@@ -219,6 +232,8 @@ export default function LoginPage() {
                   <Button 
                     onClick={() => {
                       console.log("Redirecting to HR dashboard");
+                      // Set a demo flag in cookie to bypass auth for demo
+                      document.cookie = 'demo_user_role=hr; path=/; max-age=3600';
                       window.location.href = "/dashboard/attendance/hr";
                     }} 
                     className="w-full"
