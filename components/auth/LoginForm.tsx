@@ -169,7 +169,7 @@ export function LoginForm() {
             <p className="font-semibold mb-1">Admin Access</p>
             <p className="text-xs">Lakshay Takkar: lakshay@startupsquad.in</p>
             <p className="text-xs">Sanjay Kumar Sharma: sanjay@startupsquad.in</p>
-            <p className="text-xs mt-1">Password: admin123456</p>
+            <p className="text-xs mt-1">Password: Qwerty@123</p>
           </div>
         </form>
       </CardContent>
