@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 import { 
   Users, 
   TrendingUp, 
@@ -143,43 +144,109 @@ export default function HRAttendancePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      console.log("Starting to load data...");
+      console.log("Starting to load data from Supabase...");
       
-      // Always use mock data for now to ensure it works
-      console.log("Using mock data for demonstration...");
+      // Import Supabase client
+      const { createClient } = await import('@/lib/supabaseClient');
+      const supabase = createClient();
       
-      const mockEmployees = [
-        { id: "1", name: "John Smith", employee_id: "EMP001", department: "Sales", position: "Sales Rep", email: "john@company.com", profile_photo: null },
-        { id: "2", name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", position: "Marketing Manager", email: "sarah@company.com", profile_photo: null },
-        { id: "3", name: "Mike Wilson", employee_id: "EMP003", department: "IT", position: "Developer", email: "mike@company.com", profile_photo: null },
-        { id: "4", name: "Lisa Brown", employee_id: "EMP004", department: "HR", position: "HR Manager", email: "lisa@company.com", profile_photo: null },
-        { id: "5", name: "David Lee", employee_id: "EMP005", department: "Finance", position: "Accountant", email: "david@company.com", profile_photo: null }
-      ];
+      // Fetch employees from Employee Directory
+      const { data: employeesData, error: employeesError } = await supabase
+        .from('Employee Directory')
+        .select(`
+          whalesync_postgres_id,
+          full_name,
+          employee_id,
+          department,
+          profile_photo,
+          official_email,
+          status
+        `)
+        .eq('status', 'Active');
       
-      console.log("Setting employees:", mockEmployees);
-      setEmployees(mockEmployees);
-
-      // Create mock attendance data
-      const today = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      if (employeesError) {
+        console.error('Error fetching employees:', employeesError);
+        throw employeesError;
+      }
       
-      const mockAttendance = [
-        { id: "1", employee_name: "John Smith", employee_id: "EMP001", department: "Sales", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date().toISOString(), notes: "" },
-        { id: "2", employee_name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", date: today, status: "Present", time_in: "09:15", time_out: "17:30", working_hours: 8.25, punctuality_status: "Late", marked_by: "HR", marked_at: new Date().toISOString(), notes: "" },
-        { id: "3", employee_name: "Mike Wilson", employee_id: "EMP003", department: "IT", date: today, status: "Absent", time_in: null, time_out: null, working_hours: 0, punctuality_status: "Absent", marked_by: "HR", marked_at: new Date().toISOString(), notes: "Sick leave" },
-        { id: "4", employee_name: "Lisa Brown", employee_id: "EMP004", department: "HR", date: today, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.5, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date().toISOString(), notes: "" },
-        { id: "5", employee_name: "David Lee", employee_id: "EMP005", department: "Finance", date: today, status: "Half Day", time_in: "09:00", time_out: "13:00", working_hours: 4, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date().toISOString(), notes: "Personal appointment" },
-        { id: "6", employee_name: "John Smith", employee_id: "EMP001", department: "Sales", date: yesterday, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), notes: "" },
-        { id: "7", employee_name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", date: yesterday, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), notes: "" },
-        { id: "8", employee_name: "Mike Wilson", employee_id: "EMP003", department: "IT", date: yesterday, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), notes: "" }
-      ];
+      // Fetch departments
+      const { data: departmentsData, error: departmentsError } = await supabase
+        .from('Departments')
+        .select('whalesync_postgres_id, department_name, display_name');
       
-      console.log("Setting attendance data:", mockAttendance);
-      setAttendanceData(mockAttendance);
-      setFilteredData(mockAttendance);
+      if (departmentsError) {
+        console.error('Error fetching departments:', departmentsError);
+        throw departmentsError;
+      }
+      
+      // Create department lookup
+      const departmentLookup = {};
+      departmentsData?.forEach(dept => {
+        departmentLookup[dept.whalesync_postgres_id] = dept.display_name || dept.department_name;
+      });
+      
+      // Transform employees data
+      const transformedEmployees = employeesData?.map(emp => ({
+        id: emp.whalesync_postgres_id,
+        name: emp.full_name,
+        employee_id: emp.employee_id,
+        department: departmentLookup[emp.department] || 'Unknown',
+        position: 'Employee', // Default position
+        email: emp.official_email,
+        profile_photo: emp.profile_photo
+      })) || [];
+      
+      console.log("Setting employees:", transformedEmployees);
+      setEmployees(transformedEmployees);
+      
+      // Fetch attendance data
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('Attendance')
+        .select(`
+          whalesync_postgres_id,
+          date,
+          status,
+          time_in,
+          time_out,
+          working_hours,
+          punctuality_status,
+          notes,
+          employee,
+          employee_id_from_employee,
+          full_name_from_employee,
+          department_name_from_employee
+        `)
+        .order('date', { ascending: false })
+        .limit(100); // Limit to recent records
+      
+      if (attendanceError) {
+        console.error('Error fetching attendance:', attendanceError);
+        throw attendanceError;
+      }
+      
+      // Transform attendance data
+      const transformedAttendance = attendanceData?.map(record => ({
+        id: record.whalesync_postgres_id,
+        employee_name: record.full_name_from_employee || 'Unknown',
+        employee_id: record.employee_id_from_employee || 'Unknown',
+        department: departmentLookup[record.department_name_from_employee] || 'Unknown',
+        date: record.date,
+        status: record.status || 'Not Marked',
+        time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : null,
+        time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : null,
+        working_hours: record.working_hours || 0,
+        punctuality_status: record.punctuality_status || 'Not Marked',
+        marked_by: 'HR', // Default value
+        marked_at: new Date().toISOString(),
+        notes: record.notes || ''
+      })) || [];
+      
+      console.log("Setting attendance data:", transformedAttendance);
+      setAttendanceData(transformedAttendance);
+      setFilteredData(transformedAttendance);
       
       // Calculate department stats
-      calculateDepartmentStats(mockAttendance, mockEmployees);
+      calculateDepartmentStats(transformedAttendance, transformedEmployees);
       
     } catch (error) {
       console.error("Error loading data:", error);
@@ -491,22 +558,30 @@ export default function HRAttendancePage() {
 
     try {
       const workingHours = calculateWorkingHours(attendanceForm.timeIn, attendanceForm.timeOut);
+      
+      // Import Supabase client
+      const { createClient } = await import('@/lib/supabaseClient');
+      const supabase = createClient();
+
+      // Convert time strings to decimal format (e.g., "09:00" -> 9.0, "17:30" -> 17.5)
+      const timeInDecimal = parseFloat(attendanceForm.timeIn.replace(':', '.'));
+      const timeOutDecimal = parseFloat(attendanceForm.timeOut.replace(':', '.'));
 
       const { error } = await supabase
         .from("Attendance")
         .insert({
-          employee_name: selectedEmployee.name,
-          employee_id: selectedEmployee.employee_id,
-          department: selectedEmployee.department,
+          employee: selectedEmployee.id,
+          employee_id_from_employee: selectedEmployee.employee_id,
+          full_name_from_employee: selectedEmployee.name,
           date: selectedDate,
           status: attendanceForm.status,
-          time_in: attendanceForm.timeIn,
-          time_out: attendanceForm.timeOut,
+          time_in: timeInDecimal,
+          time_out: timeOutDecimal,
           working_hours: workingHours,
           punctuality_status: attendanceForm.timeIn <= '09:00' ? 'On Time' : 'Late',
-          marked_by: 'HR',
-          marked_at: new Date().toISOString(),
-          notes: attendanceForm.notes
+          notes: attendanceForm.notes,
+          date_status: selectedDate === new Date().toISOString().split('T')[0] ? 'Today' : 'Before Today',
+          day_name_of_date: new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' })
         });
 
       if (error) throw error;
