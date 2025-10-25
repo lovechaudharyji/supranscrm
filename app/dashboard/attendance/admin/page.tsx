@@ -228,8 +228,8 @@ export default function AdminAttendancePage() {
         department: departmentLookup[record.department_name_from_employee] || 'Unknown',
         date: record.date,
         status: record.status || 'Not Marked',
-        time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : null,
-        time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : null,
+        time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : 'N/A',
+        time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : 'N/A',
         working_hours: record.working_hours || 0,
         punctuality_status: record.punctuality_status || 'Not Marked',
         marked_by: 'HR',
@@ -341,6 +341,8 @@ export default function AdminAttendancePage() {
   const processAttendanceData = (attendance: any[], employees: any[]) => {
     console.log("Processing attendance data:", attendance);
     console.log("Processing employees data:", employees);
+    console.log("Attendance length:", attendance?.length);
+    console.log("Employees length:", employees?.length);
     
     const processedAttendance = attendance.map(record => ({
       id: record.whalesync_postgres_id || record.id,
@@ -359,6 +361,7 @@ export default function AdminAttendancePage() {
     }));
 
     console.log("Processed attendance:", processedAttendance);
+    console.log("Processed attendance length:", processedAttendance.length);
     
     // Force set some test data if processedAttendance is empty
     if (processedAttendance.length === 0) {
@@ -381,6 +384,7 @@ export default function AdminAttendancePage() {
       setAttendanceData(testData);
       setFilteredData(testData);
     } else {
+      console.log("Setting attendance data to state:", processedAttendance.length, "records");
       setAttendanceData(processedAttendance);
       setFilteredData(processedAttendance);
     }
