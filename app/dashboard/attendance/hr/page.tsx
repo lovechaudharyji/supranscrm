@@ -566,7 +566,7 @@ export default function HRAttendancePage() {
       const timeOutDecimal = parseFloat(attendanceForm.timeOut.replace(':', '.'));
 
       const { error } = await supabase
-        .from("Attendance")
+        .from('Attendance')
         .insert({
           employee: selectedEmployee.id,
           employee_id_from_employee: selectedEmployee.employee_id,

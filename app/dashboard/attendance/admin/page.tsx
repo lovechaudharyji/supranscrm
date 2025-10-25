@@ -149,7 +149,7 @@ export default function AdminAttendancePage() {
       
       // Fetch employees from Employee Directory
       const { data: employeesData, error: employeesError } = await supabase
-        .from('"Employee Directory"')
+        .from('Employee Directory')
         .select(`
           whalesync_postgres_id,
           full_name,
@@ -168,7 +168,7 @@ export default function AdminAttendancePage() {
       
       // Fetch departments
       const { data: departmentsData, error: departmentsError } = await supabase
-        .from('"Departments"')
+        .from('Departments')
         .select('whalesync_postgres_id, department_name, display_name');
       
       if (departmentsError) {
@@ -196,7 +196,7 @@ export default function AdminAttendancePage() {
       
       // Fetch attendance data
       const { data: attendanceData, error: attendanceError } = await supabase
-        .from('"Attendance"')
+        .from('Attendance')
         .select(`
           whalesync_postgres_id,
           date,
