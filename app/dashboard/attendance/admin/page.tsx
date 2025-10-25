@@ -145,8 +145,7 @@ export default function AdminAttendancePage() {
       console.log("Loading real attendance data from Supabase...");
       
       // Import Supabase client
-      const { createClient } = await import('@/lib/supabaseClient');
-      const supabase = createClient();
+      const { supabase } = await import('@/lib/supabaseClient');
       
       // Fetch employees from Employee Directory
       const { data: employeesData, error: employeesError } = await supabase

@@ -147,8 +147,7 @@ export default function HRAttendancePage() {
       console.log("Starting to load data from Supabase...");
       
       // Import Supabase client
-      const { createClient } = await import('@/lib/supabaseClient');
-      const supabase = createClient();
+      const { supabase } = await import('@/lib/supabaseClient');
       
       // Fetch employees from Employee Directory
       const { data: employeesData, error: employeesError } = await supabase
@@ -560,8 +559,7 @@ export default function HRAttendancePage() {
       const workingHours = calculateWorkingHours(attendanceForm.timeIn, attendanceForm.timeOut);
       
       // Import Supabase client
-      const { createClient } = await import('@/lib/supabaseClient');
-      const supabase = createClient();
+      const { supabase } = await import('@/lib/supabaseClient');
 
       // Convert time strings to decimal format (e.g., "09:00" -> 9.0, "17:30" -> 17.5)
       const timeInDecimal = parseFloat(attendanceForm.timeIn.replace(':', '.'));
