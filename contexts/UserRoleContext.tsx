@@ -18,9 +18,9 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkUserRole = async () => {
+    const checkUserRole = () => {
       try {
-        // Check for demo mode first
+        // Only check for demo mode - no real authentication
         const demoRole = document.cookie
           .split('; ')
           .find(row => row.startsWith('demo_user_role='))
@@ -28,28 +28,6 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         
         if (demoRole) {
           setUserRole(demoRole as UserRole);
-          setIsLoading(false);
-          return;
-        }
-
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          // Check if user is HR (has specific HR email or role)
-          const { data: hrData } = await supabase
-            .from("Employee Directory")
-            .select("job_title, department")
-            .eq("official_email", user.email)
-            .single();
-
-          if (hrData && (hrData.job_title?.toLowerCase().includes('hr') || 
-                        hrData.department?.toLowerCase().includes('hr'))) {
-            setUserRole('hr');
-          } else if (hrData) {
-            setUserRole('employee');
-          } else {
-            setUserRole('admin');
-          }
         } else {
           setUserRole(null);
         }
@@ -62,17 +40,6 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
     };
 
     checkUserRole();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUserRole(null);
-      } else if (session?.user) {
-        checkUserRole();
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   return (

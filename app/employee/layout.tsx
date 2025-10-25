@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { EmployeeSidebar } from "@/components/employee/EmployeeSidebar";
 import { EmployeeHeader } from "@/components/employee/EmployeeHeader";
-import { AuthGuard } from "@/components/employee/AuthGuard";
+// AuthGuard removed - using demo mode only
 import { usePathname } from "next/navigation";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { PageProvider, usePageContext } from "@/contexts/PageContext";
@@ -85,11 +85,9 @@ export default function EmployeeLayout({
   }
 
   return (
-    <AuthGuard>
-      <PageProvider>
-        <EmployeeLayoutContent>{children}</EmployeeLayoutContent>
-      </PageProvider>
-    </AuthGuard>
+    <PageProvider>
+      <EmployeeLayoutContent>{children}</EmployeeLayoutContent>
+    </PageProvider>
   );
 }
 
