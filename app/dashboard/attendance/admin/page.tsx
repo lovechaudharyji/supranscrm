@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 import { 
   Users, 
   TrendingUp, 
@@ -142,19 +143,108 @@ export default function AdminAttendancePage() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      console.log("Loading real attendance data from Supabase...");
       
-      // Always use mock data for now to ensure it works
-      console.log("Loading mock attendance data...");
-      const mockEmployees = generateMockEmployeeData();
-      const mockAttendance = generateMockAttendanceData();
+      // Import Supabase client
+      const { createClient } = await import('@/lib/supabaseClient');
+      const supabase = createClient();
       
-      console.log("Mock employees:", mockEmployees);
-      console.log("Mock attendance:", mockAttendance);
+      // Fetch employees from Employee Directory
+      const { data: employeesData, error: employeesError } = await supabase
+        .from('Employee Directory')
+        .select(`
+          whalesync_postgres_id,
+          full_name,
+          employee_id,
+          department,
+          profile_photo,
+          official_email,
+          status
+        `)
+        .eq('status', 'Active');
       
-      processAttendanceData(mockAttendance, mockEmployees);
+      if (employeesError) {
+        console.error('Error fetching employees:', employeesError);
+        throw employeesError;
+      }
+      
+      // Fetch departments
+      const { data: departmentsData, error: departmentsError } = await supabase
+        .from('Departments')
+        .select('whalesync_postgres_id, department_name, display_name');
+      
+      if (departmentsError) {
+        console.error('Error fetching departments:', departmentsError);
+        throw departmentsError;
+      }
+      
+      // Create department lookup
+      const departmentLookup = {};
+      departmentsData?.forEach(dept => {
+        departmentLookup[dept.whalesync_postgres_id] = dept.display_name || dept.department_name;
+      });
+      
+      // Transform employees data
+      const transformedEmployees = employeesData?.map(emp => ({
+        whalesync_postgres_id: emp.whalesync_postgres_id,
+        full_name: emp.full_name,
+        employee_id: emp.employee_id,
+        department: departmentLookup[emp.department] || 'Unknown',
+        profile_photo: emp.profile_photo,
+        official_email: emp.official_email
+      })) || [];
+      
+      console.log("Real employees:", transformedEmployees);
+      
+      // Fetch attendance data
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('Attendance')
+        .select(`
+          whalesync_postgres_id,
+          date,
+          status,
+          time_in,
+          time_out,
+          working_hours,
+          punctuality_status,
+          notes,
+          employee,
+          employee_id_from_employee,
+          full_name_from_employee,
+          department_name_from_employee
+        `)
+        .order('date', { ascending: false })
+        .limit(200); // Get more records for admin view
+      
+      if (attendanceError) {
+        console.error('Error fetching attendance:', attendanceError);
+        throw attendanceError;
+      }
+      
+      // Transform attendance data
+      const transformedAttendance = attendanceData?.map(record => ({
+        id: record.whalesync_postgres_id,
+        employee_name: record.full_name_from_employee || 'Unknown',
+        employee_id: record.employee_id_from_employee || 'Unknown',
+        department: departmentLookup[record.department_name_from_employee] || 'Unknown',
+        date: record.date,
+        status: record.status || 'Not Marked',
+        time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : null,
+        time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : null,
+        working_hours: record.working_hours || 0,
+        punctuality_status: record.punctuality_status || 'Not Marked',
+        marked_by: 'HR',
+        marked_at: new Date().toISOString(),
+        notes: record.notes || ''
+      })) || [];
+      
+      console.log("Real attendance data:", transformedAttendance);
+      
+      processAttendanceData(transformedAttendance, transformedEmployees);
       
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      toast.error("Failed to load attendance data");
     } finally {
       setLoading(false);
     }
