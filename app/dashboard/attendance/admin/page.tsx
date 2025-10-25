@@ -53,7 +53,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { toast } from "sonner";
 
 interface AttendanceRecord {
   id: string;
