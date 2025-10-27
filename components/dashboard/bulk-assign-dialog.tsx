@@ -38,7 +38,7 @@ export function BulkAssignDialog({
   const unassigned = leads.filter((l) => !l.assigned_to);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
+  const [employee, setEmployee] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [serviceFilter, setServiceFilter] = useState<string>("All");
@@ -85,12 +85,6 @@ export function BulkAssignDialog({
     setSelected(copy);
   };
 
-  const toggleEmployee = (id: string) => {
-    const copy = new Set(selectedEmployees);
-    copy.has(id) ? copy.delete(id) : copy.add(id);
-    setSelectedEmployees(copy);
-  };
-
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelected(
@@ -101,34 +95,16 @@ export function BulkAssignDialog({
     }
   };
 
-  const toggleSelectAllEmployees = (checked: boolean) => {
-    if (checked) {
-      setSelectedEmployees(
-        new Set(filteredEmployees.map((e) => e.whalesync_postgres_id))
-      );
-    } else {
-      setSelectedEmployees(new Set());
-    }
-  };
-
   const assignBulk = async () => {
-    if (selectedEmployees.size === 0 || selected.size === 0) return;
+    if (!employee || selected.size === 0) return;
     setLoading(true);
     try {
-      // Distribute leads evenly among selected employees
-      const employeeArray = Array.from(selectedEmployees);
-      const leadArray = Array.from(selected);
-      
-      for (let i = 0; i < leadArray.length; i++) {
-        const leadId = leadArray[i];
-        const employeeId = employeeArray[i % employeeArray.length]; // Round-robin distribution
-        
+      for (const id of selected) {
         await supabase
           .from("Leads")
-          .update({ assigned_to: employeeId })
-          .eq("whalesync_postgres_id", leadId);
+          .update({ assigned_to: employee })
+          .eq("whalesync_postgres_id", id);
       }
-      
       onOpenChange(false);
       await reload();
     } finally {
@@ -148,56 +124,31 @@ export function BulkAssignDialog({
           </p>
         ) : (
           <>
-            {/* Assign Employees */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <label className="font-medium text-sm">Assign to:</label>
-                <span className="text-sm text-muted-foreground">
-                  {selectedEmployees.size} employee(s) selected
-                </span>
-              </div>
+            {/* Assign Employee */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <label className="font-medium text-sm">Assign to:</label>
+              <Select
+                onValueChange={(v) => setEmployee(v)}
+                value={employee || ""}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Select Sales Person" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredEmployees.map((e) => (
+                    <SelectItem
+                      key={e.whalesync_postgres_id}
+                      value={e.whalesync_postgres_id}
+                    >
+                      {e.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               
-              {/* Employee Multi-Selector */}
-              <div className="max-h-[120px] overflow-y-auto border rounded-md p-2 space-y-1">
-                {filteredEmployees.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-2 text-sm">
-                    No sales personnel found.
-                  </p>
-                ) : (
-                  <>
-                    {/* Select All Employees */}
-                    <div className="flex items-center gap-2 border-b pb-1 mb-1">
-                      <Checkbox
-                        checked={
-                          filteredEmployees.length > 0 &&
-                          selectedEmployees.size === filteredEmployees.length
-                        }
-                        onCheckedChange={(val) => toggleSelectAllEmployees(!!val)}
-                      />
-                      <span className="text-sm font-medium">Select All Employees</span>
-                    </div>
-
-                    {/* Employee List */}
-                    {filteredEmployees.map((employee) => (
-                      <div
-                        key={employee.whalesync_postgres_id}
-                        className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded"
-                      >
-                        <Checkbox
-                          checked={selectedEmployees.has(employee.whalesync_postgres_id)}
-                          onCheckedChange={() => toggleEmployee(employee.whalesync_postgres_id)}
-                        />
-                        <span className="text-sm">{employee.full_name}</span>
-                        {employee.job_title && (
-                          <span className="text-xs text-muted-foreground">
-                            ({employee.job_title})
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
+              <span className="text-sm text-muted-foreground ml-auto">
+                {selected.size} selected
+              </span>
             </div>
 
             {/* Filters */}
@@ -220,13 +171,6 @@ export function BulkAssignDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            {/* Selected Count */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">
-                {selected.size} lead(s) selected
-              </span>
             </div>
 
             {/* Leads List */}
@@ -282,9 +226,9 @@ export function BulkAssignDialog({
               </Button>
               <Button
                 onClick={assignBulk}
-                disabled={loading || selectedEmployees.size === 0 || selected.size === 0}
+                disabled={loading || !employee || selected.size === 0}
               >
-                {loading ? "Assigning..." : `Assign ${selected.size} lead(s) to ${selectedEmployees.size} employee(s)`}
+                {loading ? "Assigning..." : `Assign (${selected.size})`}
               </Button>
             </div>
           </>
