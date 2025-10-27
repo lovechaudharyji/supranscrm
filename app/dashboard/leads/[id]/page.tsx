@@ -158,21 +158,22 @@ export default function LeadDetailsPage() {
 
           {/* Main Content */}
           <div className="flex flex-1 flex-col gap-4 p-4 pt-2 overflow-auto">
-            {/* Back Button */}
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push("/dashboard/leads")}
-                className="gap-2"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back to Leads
-              </Button>
-            </div>
             {/* Lead Header Card */}
             <Card className="bg-gradient-to-t from-primary/5 to-card shadow-sm">
               <CardHeader>
+                {/* Back Button - Above Photo */}
+                <div className="flex items-center mb-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push("/dashboard/leads")}
+                    className="gap-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Back to Leads
+                  </Button>
+                </div>
+                
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6">
                   <Avatar className="h-20 w-20 border-2 border-border">
                     {lead.assigned_to?.profile_photo && (
