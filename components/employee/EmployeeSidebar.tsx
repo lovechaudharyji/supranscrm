@@ -90,7 +90,9 @@ export function EmployeeSidebar() {
   return (
     <div className="w-64 bg-card border-r min-h-screen flex flex-col">
       <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold">Employee Portal</h2>
+        <Link href="/employee">
+          <h2 className="text-lg font-semibold hover:text-primary cursor-pointer transition-colors">Employee Portal</h2>
+        </Link>
       </div>
       <div className="flex-1 px-4 py-2 employee-sidebar-scroll" style={{ minHeight: '400px' }}>
         {/* Home Navigation - Horizontal Icons Only */}

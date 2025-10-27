@@ -74,8 +74,8 @@ export default function EmployeeSubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
   const [showCredentials, setShowCredentials] = useState<{ [key: string]: boolean }>({});
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -282,8 +282,8 @@ export default function EmployeeSubscriptionsPage() {
   const filteredSubscriptions = subscriptions.filter(sub => {
     const matchesSearch = sub.subscription_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          sub.vendor?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || sub.status === statusFilter;
-    const matchesCategory = categoryFilter === "all" || sub.category === categoryFilter;
+    const matchesStatus = statusFilter.length === 0 || statusFilter.includes(sub.status);
+    const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(sub.category);
     return matchesSearch && matchesStatus && matchesCategory;
   });
 
@@ -442,34 +442,141 @@ export default function EmployeeSubscriptionsPage() {
             />
           </div>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Active">Active</SelectItem>
-            <SelectItem value="Paused">Paused</SelectItem>
-            <SelectItem value="Inactive">Inactive</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-40">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="SaaS">SaaS</SelectItem>
-            <SelectItem value="Marketing">Marketing</SelectItem>
-            <SelectItem value="Cloud">Cloud</SelectItem>
-            <SelectItem value="Productivity">Productivity</SelectItem>
-            <SelectItem value="Security">Security</SelectItem>
-            <SelectItem value="Finance">Finance</SelectItem>
-            <SelectItem value="Communication">Communication</SelectItem>
-            <SelectItem value="Other">Other</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Status Filter - Multi-selector */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full sm:w-40 justify-start text-left font-normal text-sm">
+              <Filter className="mr-2 h-4 w-4" />
+              {statusFilter.length === 0 ? "All Status" : `${statusFilter.length} selected`}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-0" align="start">
+            <div className="p-3 border-b">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Filter by Status</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStatusFilter(["Active", "Paused", "Inactive", "Cancelled"])}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Select All
+                  </Button>
+                  {statusFilter.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStatusFilter([])}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="p-2 space-y-2">
+              {["Active", "Paused", "Inactive", "Cancelled"].map((status) => (
+                <div key={status} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`status-${status}`}
+                    checked={statusFilter.includes(status)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setStatusFilter(prev => [...prev, status]);
+                      } else {
+                        setStatusFilter(prev => prev.filter(s => s !== status));
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`status-${status}`}
+                    className="text-sm cursor-pointer flex-1"
+                  >
+                    {status}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Category Filter - Multi-selector */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full sm:w-40 justify-start text-left font-normal text-sm">
+              <Filter className="mr-2 h-4 w-4" />
+              {categoryFilter.length === 0 ? "All Categories" : `${categoryFilter.length} selected`}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-0" align="start">
+            <div className="p-3 border-b">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Filter by Category</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCategoryFilter(["SaaS", "Marketing", "Cloud", "Productivity", "Security", "Finance", "Communication", "Other"])}
+                    className="h-6 px-2 text-xs"
+                  >
+                    Select All
+                  </Button>
+                  {categoryFilter.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCategoryFilter([])}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="p-2 space-y-2">
+              {["SaaS", "Marketing", "Cloud", "Productivity", "Security", "Finance", "Communication", "Other"].map((category) => (
+                <div key={category} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`category-${category}`}
+                    checked={categoryFilter.includes(category)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setCategoryFilter(prev => [...prev, category]);
+                      } else {
+                        setCategoryFilter(prev => prev.filter(c => c !== category));
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`category-${category}`}
+                    className="text-sm cursor-pointer flex-1"
+                  >
+                    {category}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        
+        {/* Clear All Filters Button */}
+        {(statusFilter.length > 0 || categoryFilter.length > 0) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setStatusFilter([]);
+              setCategoryFilter([]);
+            }}
+            className="text-xs"
+          >
+            Clear All Filters
+          </Button>
+        )}
+        
         <div className="flex items-center gap-2">
           <Button
             variant={viewMode === 'grid' ? 'default' : 'outline'}
@@ -881,7 +988,7 @@ export default function EmployeeSubscriptionsPage() {
             <Key className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No Subscriptions Found</h3>
             <p className="text-muted-foreground text-center">
-              {searchTerm || statusFilter !== "all" || categoryFilter !== "all"
+              {searchTerm || statusFilter.length > 0 || categoryFilter.length > 0
                 ? "Try adjusting your filters to see more results."
                 : "You haven't been assigned to any subscriptions yet. Contact your administrator for access."}
             </p>

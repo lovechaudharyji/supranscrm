@@ -27,7 +27,11 @@ import {
   Grid3X3,
   List,
   Table,
-  Settings
+  Settings,
+  X,
+  Share2,
+  Edit,
+  Trash2
 } from "lucide-react";
 import { Table as TableComponent, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -69,16 +73,26 @@ interface TicketChat {
   created_at: string;
 }
 
+interface Employee {
+  whalesync_postgres_id: string;
+  full_name: string;
+  profile_photo?: string;
+  job_title?: string;
+}
+
 export default function EmployeeTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [timeFilter, setTimeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const [timeFilter, setTimeFilter] = useState<string[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'kanban'>('table');
@@ -117,6 +131,7 @@ export default function EmployeeTicketsPage() {
 
   useEffect(() => {
     loadCurrentUser();
+    loadEmployees();
   }, []);
 
   useEffect(() => {
@@ -159,62 +174,18 @@ export default function EmployeeTicketsPage() {
     try {
       setLoading(true);
       
-      // First get assigned tickets for this employee
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from("ticket_assignments")
-        .select("ticket_id")
-        .eq("employee_id", currentUser.whalesync_postgres_id);
-
-      if (assignmentsError) {
-        console.error("Error loading assignments:", assignmentsError);
-        throw assignmentsError;
-      }
-
-      if (!assignments || assignments.length === 0) {
-        setTickets([]);
-        setStats({ total: 0, new: 0, inProgress: 0, escalated: 0, resolved: 0 });
-        return;
-      }
-
-      const ticketIds = assignments.map(a => a.ticket_id);
-
-      // Build date filter
-      let dateFilter = "";
-      const now = new Date();
-      switch (timeFilter) {
-        case "yesterday":
-          const yesterday = new Date(now);
-          yesterday.setDate(yesterday.getDate() - 1);
-          dateFilter = `created_at >= '${yesterday.toISOString().split('T')[0]}' AND created_at < '${now.toISOString().split('T')[0]}'`;
-          break;
-        case "7days":
-          const weekAgo = new Date(now);
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          dateFilter = `created_at >= '${weekAgo.toISOString()}'`;
-          break;
-        case "2weeks":
-          const twoWeeksAgo = new Date(now);
-          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-          dateFilter = `created_at >= '${twoWeeksAgo.toISOString()}'`;
-          break;
-        case "thismonth":
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          dateFilter = `created_at >= '${startOfMonth.toISOString()}'`;
-          break;
-      }
-
-      // Build query for assigned tickets only
+      // Get tickets assigned to this employee directly from the tickets table
       let query = supabase
         .from("tickets")
         .select("*")
-        .in("id", ticketIds);
+        .eq("assigned_to", currentUser.full_name);
       
-      if (statusFilter !== "all") {
-        query = query.eq("status", statusFilter);
+      if (statusFilter.length > 0) {
+        query = query.in("status", statusFilter);
       }
       
-      if (priorityFilter !== "all") {
-        query = query.eq("priority", priorityFilter);
+      if (priorityFilter.length > 0) {
+        query = query.in("priority", priorityFilter);
       }
 
       const { data: ticketsData, error: ticketsError } = await query
@@ -227,29 +198,31 @@ export default function EmployeeTicketsPage() {
 
       // Apply date filter in JavaScript if needed
       let filteredTickets = ticketsData || [];
-      if (dateFilter && timeFilter !== "all") {
+      if (timeFilter.length > 0) {
         const now = new Date();
         filteredTickets = ticketsData?.filter(ticket => {
           const ticketDate = new Date(ticket.created_at);
-          switch (timeFilter) {
-            case "yesterday":
-              const yesterday = new Date(now);
-              yesterday.setDate(yesterday.getDate() - 1);
-              return ticketDate >= yesterday && ticketDate < now;
-            case "7days":
-              const weekAgo = new Date(now);
-              weekAgo.setDate(weekAgo.getDate() - 7);
-              return ticketDate >= weekAgo;
-            case "2weeks":
-              const twoWeeksAgo = new Date(now);
-              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-              return ticketDate >= twoWeeksAgo;
-            case "thismonth":
-              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-              return ticketDate >= startOfMonth;
-            default:
-              return true;
-          }
+          return timeFilter.some(filter => {
+            switch (filter) {
+              case "yesterday":
+                const yesterday = new Date(now);
+                yesterday.setDate(yesterday.getDate() - 1);
+                return ticketDate >= yesterday && ticketDate < now;
+              case "7days":
+                const weekAgo = new Date(now);
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return ticketDate >= weekAgo;
+              case "2weeks":
+                const twoWeeksAgo = new Date(now);
+                twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                return ticketDate >= twoWeeksAgo;
+              case "thismonth":
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                return ticketDate >= startOfMonth;
+              default:
+                return false;
+            }
+          });
         }) || [];
       }
 
@@ -275,6 +248,117 @@ export default function EmployeeTicketsPage() {
       toast.error("Failed to load tickets");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadEmployees = async () => {
+    try {
+      console.log("Loading employees...");
+      const { data, error } = await supabase
+        .from("Employee Directory")
+        .select("whalesync_postgres_id, full_name, profile_photo, job_title")
+        .order("full_name");
+
+      if (error) {
+        console.error("Error loading employees:", error);
+        return;
+      }
+
+      console.log("Loaded employees:", data);
+      setEmployees(data || []);
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    }
+  };
+
+  const handleShareTicket = async () => {
+    if (!selectedTicket || selectedEmployees.length === 0) return;
+
+    try {
+      // Create ticket assignments for selected employees
+      const assignments = selectedEmployees.map(employeeId => ({
+        ticket_id: selectedTicket.id,
+        employee_id: employeeId,
+        assigned_at: new Date().toISOString(),
+        assigned_by: currentUser?.full_name || "Employee"
+      }));
+
+      const { error } = await supabase
+        .from("ticket_assignments")
+        .insert(assignments);
+
+      if (error) throw error;
+
+      // Add history entry
+      await supabase
+        .from("ticket_history")
+        .insert({
+          ticket_id: selectedTicket.id,
+          user_name: currentUser?.full_name || "Employee",
+          action: `Ticket shared with ${selectedEmployees.length} employee(s).`
+        });
+
+      toast.success(`Ticket shared with ${selectedEmployees.length} employee(s)`);
+      setIsShareDialogOpen(false);
+      setSelectedEmployees([]);
+      loadTickets();
+    } catch (error) {
+      console.error("Error sharing ticket:", error);
+      toast.error("Failed to share ticket");
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
+    if (!confirm("Are you sure you want to delete this ticket? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      // Delete related records first
+      await supabase
+        .from("ticket_history")
+        .delete()
+        .eq("ticket_id", ticketId);
+
+      await supabase
+        .from("ticket_chat")
+        .delete()
+        .eq("ticket_id", ticketId);
+
+      await supabase
+        .from("ticket_assignments")
+        .delete()
+        .eq("ticket_id", ticketId);
+
+      // Delete the ticket
+      const { error } = await supabase
+        .from("tickets")
+        .delete()
+        .eq("id", ticketId);
+
+      if (error) throw error;
+
+      toast.success("Ticket deleted successfully");
+      loadTickets();
+    } catch (error) {
+      console.error("Error deleting ticket:", error);
+      toast.error("Failed to delete ticket");
+    }
+  };
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    );
+  };
+
+  const toggleSelectAllEmployees = () => {
+    if (selectedEmployees.length === employees.length) {
+      setSelectedEmployees([]);
+    } else {
+      setSelectedEmployees(employees.map(emp => emp.whalesync_postgres_id));
     }
   };
 
@@ -318,6 +402,11 @@ export default function EmployeeTicketsPage() {
   };
 
   const handleCreateTicket = async () => {
+    if (!currentUser) {
+      toast.error("User not authenticated");
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("tickets")
@@ -328,19 +417,22 @@ export default function EmployeeTicketsPage() {
           issue: newTicket.issue,
           priority: newTicket.priority,
           status: 'New',
-          assigned_to: 'Operations'
+          assigned_to: currentUser.full_name
         })
         .select()
         .single();
 
       if (error) throw error;
 
+      // Ticket is already assigned to the current employee via assigned_to field
+      console.log("Ticket created and assigned to:", currentUser.full_name);
+
       // Add initial history entry
       await supabase
         .from("ticket_history")
         .insert({
           ticket_id: data.id,
-          user_name: "Employee",
+          user_name: currentUser.full_name,
           action: "Ticket created via Employee Portal."
         });
 
@@ -377,7 +469,7 @@ export default function EmployeeTicketsPage() {
         .from("ticket_history")
         .insert({
           ticket_id: ticketId,
-          user_name: "Employee",
+          user_name: currentUser?.full_name || "Employee",
           action: `Ticket status changed to ${newStatus}.`
         });
 
@@ -400,7 +492,7 @@ export default function EmployeeTicketsPage() {
         .from("ticket_chat")
         .insert({
           ticket_id: selectedTicket.id,
-          user_name: "Employee",
+          user_name: currentUser?.full_name || "Employee",
           message: chatMessage,
           sender_type: "sent"
         });
@@ -412,7 +504,7 @@ export default function EmployeeTicketsPage() {
         .from("ticket_history")
         .insert({
           ticket_id: selectedTicket.id,
-          user_name: "Employee",
+          user_name: currentUser?.full_name || "Employee",
           action: "Employee sent a chat message."
         });
 
@@ -563,6 +655,14 @@ export default function EmployeeTicketsPage() {
     });
   };
 
+  // Clear all filters function
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setStatusFilter([]);
+    setPriorityFilter([]);
+    setTimeFilter([]);
+  };
+
   // Drag and Drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -610,7 +710,7 @@ export default function EmployeeTicketsPage() {
         .from("ticket_history")
         .insert({
           ticket_id: ticketId,
-          user_name: "Employee",
+          user_name: currentUser?.full_name || "Employee",
           action: `Ticket status changed to ${newStatus} via drag and drop.`
         });
 
@@ -755,44 +855,217 @@ export default function EmployeeTicketsPage() {
             />
 
             <div className="flex gap-2 items-center">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="New">New</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Escalated">Escalated</SelectItem>
-                  <SelectItem value="Resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Status Filter - Multi-selector */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-[140px] h-10 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {statusFilter.length === 0 ? "All Status" : `${statusFilter.length} selected`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <div className="p-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Filter by Status</span>
+                      {statusFilter.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setStatusFilter([])}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <div className="p-2">
+                      <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                           onClick={() => setStatusFilter([])}>
+                        <input
+                          type="checkbox"
+                          checked={statusFilter.length === 0}
+                          onChange={() => setStatusFilter([])}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">All Status</span>
+                      </div>
+                      {["New", "In Progress", "Escalated", "Resolved"].map((status) => (
+                        <div key={status} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                             onClick={() => {
+                               if (statusFilter.includes(status)) {
+                                 setStatusFilter(statusFilter.filter(s => s !== status));
+                               } else {
+                                 setStatusFilter([...statusFilter, status]);
+                               }
+                             }}>
+                          <input
+                            type="checkbox"
+                            checked={statusFilter.includes(status)}
+                            onChange={() => {
+                              if (statusFilter.includes(status)) {
+                                setStatusFilter(statusFilter.filter(s => s !== status));
+                              } else {
+                                setStatusFilter([...statusFilter, status]);
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-40 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priority</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Priority Filter - Multi-selector */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-[140px] h-10 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {priorityFilter.length === 0 ? "All Priority" : `${priorityFilter.length} selected`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <div className="p-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Filter by Priority</span>
+                      {priorityFilter.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPriorityFilter([])}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <div className="p-2">
+                      <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                           onClick={() => setPriorityFilter([])}>
+                        <input
+                          type="checkbox"
+                          checked={priorityFilter.length === 0}
+                          onChange={() => setPriorityFilter([])}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">All Priority</span>
+                      </div>
+                      {["Low", "Medium", "High", "Critical"].map((priority) => (
+                        <div key={priority} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                             onClick={() => {
+                               if (priorityFilter.includes(priority)) {
+                                 setPriorityFilter(priorityFilter.filter(p => p !== priority));
+                               } else {
+                                 setPriorityFilter([...priorityFilter, priority]);
+                               }
+                             }}>
+                          <input
+                            type="checkbox"
+                            checked={priorityFilter.includes(priority)}
+                            onChange={() => {
+                              if (priorityFilter.includes(priority)) {
+                                setPriorityFilter(priorityFilter.filter(p => p !== priority));
+                              } else {
+                                setPriorityFilter([...priorityFilter, priority]);
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{priority}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-              <Select value={timeFilter} onValueChange={setTimeFilter}>
-                <SelectTrigger className="w-40 h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="7days">Last 7 Days</SelectItem>
-                  <SelectItem value="2weeks">Last 2 Weeks</SelectItem>
-                  <SelectItem value="thismonth">This Month</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Time Filter - Multi-selector */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-[140px] h-10 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {timeFilter.length === 0 ? "All Time" : `${timeFilter.length} selected`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-0" align="start">
+                  <div className="p-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Filter by Time</span>
+                      {timeFilter.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setTimeFilter([])}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Clear All
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    <div className="p-2">
+                      <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                           onClick={() => setTimeFilter([])}>
+                        <input
+                          type="checkbox"
+                          checked={timeFilter.length === 0}
+                          onChange={() => setTimeFilter([])}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">All Time</span>
+                      </div>
+                      {[
+                        { value: "yesterday", label: "Yesterday" },
+                        { value: "7days", label: "Last 7 Days" },
+                        { value: "2weeks", label: "Last 2 Weeks" },
+                        { value: "thismonth", label: "This Month" }
+                      ].map((time) => (
+                        <div key={time.value} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                             onClick={() => {
+                               if (timeFilter.includes(time.value)) {
+                                 setTimeFilter(timeFilter.filter(t => t !== time.value));
+                               } else {
+                                 setTimeFilter([...timeFilter, time.value]);
+                               }
+                             }}>
+                          <input
+                            type="checkbox"
+                            checked={timeFilter.includes(time.value)}
+                            onChange={() => {
+                              if (timeFilter.includes(time.value)) {
+                                setTimeFilter(timeFilter.filter(t => t !== time.value));
+                              } else {
+                                setTimeFilter([...timeFilter, time.value]);
+                              }
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">{time.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Clear All Filters Button */}
+              {(searchTerm || statusFilter.length > 0 || priorityFilter.length > 0 || timeFilter.length > 0) && (
+                <Button 
+                  variant="outline" 
+                  className="gap-2 h-10 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 bg-background border-muted-foreground/30"
+                  onClick={clearAllFilters}
+                >
+                  <X className="h-4 w-4" />
+                  Clear All
+                </Button>
+              )}
 
               <Button onClick={() => setIsCreateDialogOpen(true)} className="h-10">
                 <Plus className="h-4 w-4 mr-2" />
@@ -1181,8 +1454,48 @@ export default function EmployeeTicketsPage() {
                                         setIsDetailsDialogOpen(true);
                                       }}
                                       className="h-6 w-6 hover:bg-muted flex-shrink-0"
+                                      title="View Ticket"
                                     >
                                       <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedTicket(ticket);
+                                        setSelectedEmployees([]);
+                                        setIsShareDialogOpen(true);
+                                      }}
+                                      className="h-6 w-6 hover:bg-muted flex-shrink-0"
+                                      title="Share Ticket"
+                                    >
+                                      <Share2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        loadTicketDetails(ticket.id);
+                                        setIsDetailsDialogOpen(true);
+                                      }}
+                                      className="h-6 w-6 hover:bg-muted flex-shrink-0"
+                                      title="Edit Ticket"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteTicket(ticket.id);
+                                      }}
+                                      className="h-6 w-6 hover:bg-muted flex-shrink-0"
+                                      title="Delete Ticket"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
                                     </Button>
                                   </div>
                                 </TableCell>
@@ -1463,6 +1776,95 @@ export default function EmployeeTicketsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Ticket Dialog */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Share Ticket with Employees</DialogTitle>
+            <DialogDescription>
+              Select employees to share this ticket with. They will be able to view and collaborate on this ticket.
+              {employees.length > 0 && ` (${employees.length} employees available)`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTicket && (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/50 rounded-lg">
+                <h4 className="font-semibold">Ticket #{selectedTicket.ticket_number}</h4>
+                <p className="text-sm text-muted-foreground">{selectedTicket.company} - {selectedTicket.issue}</p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Select Employees</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleSelectAllEmployees}
+                    className="text-xs"
+                  >
+                    {selectedEmployees.length === employees.length ? "Deselect All" : "Select All"}
+                  </Button>
+                </div>
+                
+                <div className="max-h-60 overflow-y-auto border rounded-md p-3 space-y-2">
+                  {employees.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-4">
+                      No employees found. Loading...
+                    </div>
+                  ) : (
+                    employees.map(employee => (
+                    <div key={employee.whalesync_postgres_id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`share-${employee.whalesync_postgres_id}`}
+                        checked={selectedEmployees.includes(employee.whalesync_postgres_id)}
+                        onCheckedChange={() => toggleEmployeeSelection(employee.whalesync_postgres_id)}
+                      />
+                      <label 
+                        htmlFor={`share-${employee.whalesync_postgres_id}`} 
+                        className="text-sm flex items-center gap-2 cursor-pointer flex-1"
+                      >
+                        {employee.profile_photo ? (
+                          <img 
+                            src={employee.profile_photo} 
+                            alt={employee.full_name}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
+                            {employee.full_name.charAt(0)}
+                          </div>
+                        )}
+                        <span className="font-medium">{employee.full_name}</span>
+                        <span className="text-muted-foreground text-xs">({employee.job_title || 'No Title'})</span>
+                      </label>
+                    </div>
+                  ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsShareDialogOpen(false);
+              setSelectedEmployees([]);
+            }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleShareTicket}
+              disabled={selectedEmployees.length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Share with {selectedEmployees.length} Employee{selectedEmployees.length !== 1 ? 's' : ''}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

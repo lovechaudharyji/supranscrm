@@ -66,7 +66,7 @@ type SortDirection = "asc" | "desc" | null;
 export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday = false }: LeadsTableProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
-  const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [serviceFilter, setServiceFilter] = useState<string[]>([]);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
@@ -111,10 +111,23 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
       lead.mobile?.includes(searchTerm) ||
       lead.city?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesService = serviceFilter === "all" || lead.services === serviceFilter;
+    const matchesService = serviceFilter.length === 0 || serviceFilter.includes(lead.services || "");
     const matchesStage = stageFilter === "all" || lead.stage === stageFilter;
 
-    return matchesSearch && matchesService && matchesStage;
+    // Date filter logic
+    const matchesDate = !dateFilter || (() => {
+      if (!lead.date_and_time) return false;
+      const leadDate = new Date(lead.date_and_time);
+      const filterDate = new Date(dateFilter);
+      
+      // Compare only the date part (ignore time)
+      const leadDateOnly = new Date(leadDate.getFullYear(), leadDate.getMonth(), leadDate.getDate());
+      const filterDateOnly = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
+      
+      return leadDateOnly.getTime() === filterDateOnly.getTime();
+    })();
+
+    return matchesSearch && matchesService && matchesStage && matchesDate;
   });
 
   // Sort leads
@@ -293,20 +306,70 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
 
           {/* Right Side - Filters and Actions */}
           <div className="flex flex-wrap items-center gap-1 w-full lg:w-auto">
-            {/* Service Filter */}
-            <Select value={serviceFilter} onValueChange={setServiceFilter}>
-              <SelectTrigger className="w-[120px] h-9 text-sm">
-                <SelectValue placeholder="Services" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Services</SelectItem>
-                {services.map((service) => (
-                  <SelectItem key={service} value={service!}>
-                    {service}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Service Filter - Multi-selector */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm">
+                  <Briefcase className="mr-2 h-4 w-4" />
+                  {serviceFilter.length === 0 ? "All Services" : `${serviceFilter.length} selected`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-0" align="start">
+                <div className="p-3 border-b">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Filter by Services</span>
+                    {serviceFilter.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setServiceFilter([])}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Clear All
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  <div className="p-2">
+                    <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                         onClick={() => setServiceFilter([])}>
+                      <input
+                        type="checkbox"
+                        checked={serviceFilter.length === 0}
+                        onChange={() => setServiceFilter([])}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">All Services</span>
+                    </div>
+                    {services.map((service) => (
+                      <div key={service} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                           onClick={() => {
+                             if (serviceFilter.includes(service!)) {
+                               setServiceFilter(serviceFilter.filter(s => s !== service));
+                             } else {
+                               setServiceFilter([...serviceFilter, service!]);
+                             }
+                           }}>
+                        <input
+                          type="checkbox"
+                          checked={serviceFilter.includes(service!)}
+                          onChange={() => {
+                            if (serviceFilter.includes(service!)) {
+                              setServiceFilter(serviceFilter.filter(s => s !== service));
+                            } else {
+                              setServiceFilter([...serviceFilter, service!]);
+                            }
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{service}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Stage Filter */}
             <Select value={stageFilter} onValueChange={setStageFilter}>
@@ -332,12 +395,29 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <CalendarComponent
-                  mode="single"
-                  selected={dateFilter}
-                  onSelect={setDateFilter}
-                  initialFocus
-                />
+                <div className="flex flex-col">
+                  <div className="p-3 border-b">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Filter by Date</span>
+                      {dateFilter && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDateFilter(undefined)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <CalendarComponent
+                    mode="single"
+                    selected={dateFilter}
+                    onSelect={setDateFilter}
+                    initialFocus
+                  />
+                </div>
               </PopoverContent>
             </Popover>
 

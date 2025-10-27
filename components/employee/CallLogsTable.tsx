@@ -27,7 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Calendar, Download, Columns, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Calendar, Download, Columns, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown, Briefcase, Heart, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -64,8 +64,8 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState("");
-  const [serviceFilter, setServiceFilter] = useState<string>("all");
-  const [sentimentFilter, setSentimentFilter] = useState<string>("all");
+  const [serviceFilter, setServiceFilter] = useState<string[]>([]);
+  const [sentimentFilter, setSentimentFilter] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
@@ -106,9 +106,9 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
       call.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       call.client_number?.includes(searchTerm);
 
-    const matchesService = serviceFilter === "all" || service === serviceFilter;
+    const matchesService = serviceFilter.length === 0 || serviceFilter.includes(service || "");
 
-    const matchesSentiment = sentimentFilter === "all" || call.sentiment === sentimentFilter;
+    const matchesSentiment = sentimentFilter.length === 0 || sentimentFilter.includes(call.sentiment || "");
 
     const matchesDate = !dateFilter || 
       (call.call_date && new Date(call.call_date).toDateString() === dateFilter.toDateString());
@@ -206,6 +206,15 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
     return "border-gray-500/50 text-gray-700 bg-gray-50 dark:border-gray-500/30 dark:text-gray-400 dark:bg-gray-950/30";
   };
 
+  // Clear all filters function
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setServiceFilter([]);
+    setSentimentFilter([]);
+    setDateFilter(undefined);
+    setCurrentPage(1);
+  };
+
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
       // Cycle through: asc -> desc -> null
@@ -293,35 +302,135 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
 
         {/* Right Side - Filters and Actions */}
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-          {/* Service Filter */}
-          <Select value={serviceFilter} onValueChange={setServiceFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue placeholder="All Services" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Services</SelectItem>
-              {services.map((service) => (
-                <SelectItem key={service} value={service || ""}>
-                  {service}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Service Filter - Multi-selector */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm">
+                <Briefcase className="mr-2 h-4 w-4" />
+                {serviceFilter.length === 0 ? "All Services" : `${serviceFilter.length} selected`}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="start">
+              <div className="p-3 border-b">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Filter by Services</span>
+                  {serviceFilter.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setServiceFilter([])}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                <div className="p-2">
+                  <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                       onClick={() => setServiceFilter([])}>
+                    <input
+                      type="checkbox"
+                      checked={serviceFilter.length === 0}
+                      onChange={() => setServiceFilter([])}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm">All Services</span>
+                  </div>
+                  {services.map((service) => (
+                    <div key={service} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                         onClick={() => {
+                           if (serviceFilter.includes(service!)) {
+                             setServiceFilter(serviceFilter.filter(s => s !== service));
+                           } else {
+                             setServiceFilter([...serviceFilter, service!]);
+                           }
+                         }}>
+                      <input
+                        type="checkbox"
+                        checked={serviceFilter.includes(service!)}
+                        onChange={() => {
+                          if (serviceFilter.includes(service!)) {
+                            setServiceFilter(serviceFilter.filter(s => s !== service));
+                          } else {
+                            setServiceFilter([...serviceFilter, service!]);
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{service}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
-          {/* Sentiment Filter */}
-          <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue placeholder="All Sentiments" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Sentiments</SelectItem>
-              {sentiments.map((sentiment) => (
-                <SelectItem key={sentiment} value={sentiment || ""}>
-                  {sentiment}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Sentiment Filter - Multi-selector */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm">
+                <Heart className="mr-2 h-4 w-4" />
+                {sentimentFilter.length === 0 ? "All Sentiments" : `${sentimentFilter.length} selected`}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-0" align="start">
+              <div className="p-3 border-b">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Filter by Sentiments</span>
+                  {sentimentFilter.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSentimentFilter([])}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-60 overflow-y-auto">
+                <div className="p-2">
+                  <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                       onClick={() => setSentimentFilter([])}>
+                    <input
+                      type="checkbox"
+                      checked={sentimentFilter.length === 0}
+                      onChange={() => setSentimentFilter([])}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm">All Sentiments</span>
+                  </div>
+                  {sentiments.map((sentiment) => (
+                    <div key={sentiment} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                         onClick={() => {
+                           if (sentimentFilter.includes(sentiment!)) {
+                             setSentimentFilter(sentimentFilter.filter(s => s !== sentiment));
+                           } else {
+                             setSentimentFilter([...sentimentFilter, sentiment!]);
+                           }
+                         }}>
+                      <input
+                        type="checkbox"
+                        checked={sentimentFilter.includes(sentiment!)}
+                        onChange={() => {
+                          if (sentimentFilter.includes(sentiment!)) {
+                            setSentimentFilter(sentimentFilter.filter(s => s !== sentiment));
+                          } else {
+                            setSentimentFilter([...sentimentFilter, sentiment!]);
+                          }
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">{sentiment}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Date Filter */}
           <Popover>
@@ -352,6 +461,18 @@ export function CallLogsTable({ calls }: CallLogsTableProps) {
               )}
             </PopoverContent>
           </Popover>
+
+          {/* Clear All Filters Button */}
+          {(searchTerm || serviceFilter.length > 0 || sentimentFilter.length > 0 || dateFilter) && (
+            <Button 
+              variant="outline" 
+              className="gap-2 h-9 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20"
+              onClick={clearAllFilters}
+            >
+              <X className="h-4 w-4" />
+              Clear All
+            </Button>
+          )}
 
           {/* View Toggle */}
           <Button 

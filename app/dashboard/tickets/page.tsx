@@ -38,7 +38,9 @@ import {
   Trash2,
   GripVertical,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Share2,
+  UserX
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
@@ -78,6 +80,7 @@ interface Employee {
   whalesync_postgres_id: string;
   full_name: string;
   profile_photo?: string;
+  job_title?: string;
 }
 
 interface TicketAssignment {
@@ -96,7 +99,9 @@ export default function TicketsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
@@ -183,16 +188,21 @@ export default function TicketsPage() {
 
   const loadEmployees = async () => {
     try {
+      console.log("Loading employees...");
       const { data, error } = await supabase
         .from("Employee Directory")
-        .select("whalesync_postgres_id, full_name, profile_photo")
-        .eq("status", "Active");
+        .select("whalesync_postgres_id, full_name, profile_photo, job_title")
+        .order("full_name");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error loading employees:", error);
+        return;
+      }
+
+      console.log("Loaded employees:", data);
       setEmployees(data || []);
     } catch (error) {
       console.error("Error loading employees:", error);
-      toast.error("Failed to load employees");
     }
   };
 
@@ -424,6 +434,59 @@ export default function TicketsPage() {
     } catch (error) {
       console.error("Error deleting ticket:", error);
       toast.error("Failed to delete ticket");
+    }
+  };
+
+  const handleShareTicket = async () => {
+    if (!selectedTicket || selectedEmployees.length === 0) return;
+
+    try {
+      // Create ticket assignments for selected employees
+      const assignments = selectedEmployees.map(employeeId => ({
+        ticket_id: selectedTicket.id,
+        employee_id: employeeId,
+        assigned_at: new Date().toISOString(),
+        assigned_by: "Admin" // You can get this from current user context
+      }));
+
+      const { error } = await supabase
+        .from("ticket_assignments")
+        .insert(assignments);
+
+      if (error) throw error;
+
+      // Add history entry
+      await supabase
+        .from("ticket_history")
+        .insert({
+          ticket_id: selectedTicket.id,
+          user_name: "Admin",
+          action: `Ticket shared with ${selectedEmployees.length} employee(s).`
+        });
+
+      toast.success(`Ticket shared with ${selectedEmployees.length} employee(s)`);
+      setIsShareDialogOpen(false);
+      setSelectedEmployees([]);
+      loadTickets();
+    } catch (error) {
+      console.error("Error sharing ticket:", error);
+      toast.error("Failed to share ticket");
+    }
+  };
+
+  const toggleEmployeeSelection = (employeeId: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(employeeId) 
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    );
+  };
+
+  const toggleSelectAllEmployees = () => {
+    if (selectedEmployees.length === employees.length) {
+      setSelectedEmployees([]);
+    } else {
+      setSelectedEmployees(employees.map(emp => emp.whalesync_postgres_id));
     }
   };
 
@@ -1339,9 +1402,23 @@ export default function TicketsPage() {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      setSelectedTicket(ticket);
+                                      setSelectedEmployees([]);
+                                      setIsShareDialogOpen(true);
+                                    }}
+                                    className="h-8 px-2"
+                                    title="Share Ticket"
+                                  >
+                                    <Share2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       handleDeleteTicket(ticket.id);
                                     }}
-                                    className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="h-8 px-2"
                                     title="Delete Ticket"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -1686,6 +1763,95 @@ export default function TicketsPage() {
               }}>
                 <UserPlus className="h-4 w-4 mr-2" />
                 Assign Ticket
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Share Ticket Dialog */}
+        <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Share Ticket with Employees</DialogTitle>
+              <DialogDescription>
+                Select employees to share this ticket with. They will be able to view and collaborate on this ticket.
+                {employees.length > 0 && ` (${employees.length} employees available)`}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedTicket && (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h4 className="font-semibold">Ticket #{selectedTicket.ticket_number}</h4>
+                  <p className="text-sm text-muted-foreground">{selectedTicket.company} - {selectedTicket.issue}</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Select Employees</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleSelectAllEmployees}
+                      className="text-xs"
+                    >
+                      {selectedEmployees.length === employees.length ? "Deselect All" : "Select All"}
+                    </Button>
+                  </div>
+                  
+                  <div className="max-h-60 overflow-y-auto border rounded-md p-3 space-y-2">
+                    {employees.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-4">
+                        No employees found. Loading...
+                      </div>
+                    ) : (
+                      employees.map(employee => (
+                      <div key={employee.whalesync_postgres_id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`share-${employee.whalesync_postgres_id}`}
+                          checked={selectedEmployees.includes(employee.whalesync_postgres_id)}
+                          onCheckedChange={() => toggleEmployeeSelection(employee.whalesync_postgres_id)}
+                        />
+                        <label 
+                          htmlFor={`share-${employee.whalesync_postgres_id}`} 
+                          className="text-sm flex items-center gap-2 cursor-pointer flex-1"
+                        >
+                          {employee.profile_photo ? (
+                            <img 
+                              src={employee.profile_photo} 
+                              alt={employee.full_name}
+                              className="w-6 h-6 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
+                              {employee.full_name.charAt(0)}
+                            </div>
+                          )}
+                          <span className="font-medium">{employee.full_name}</span>
+                          <span className="text-muted-foreground text-xs">({employee.job_title || 'No Title'})</span>
+                        </label>
+                      </div>
+                    ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setIsShareDialogOpen(false);
+                setSelectedEmployees([]);
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleShareTicket}
+                disabled={selectedEmployees.length === 0}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Share with {selectedEmployees.length} Employee{selectedEmployees.length !== 1 ? 's' : ''}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FileText, 
   Image, 
@@ -54,7 +53,7 @@ export default function EmployeeDocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [showKanban, setShowKanban] = useState(true);
@@ -148,7 +147,7 @@ export default function EmployeeDocumentsPage() {
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          doc.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === "all" || doc.category === categoryFilter;
+    const matchesCategory = categoryFilter.length === 0 || categoryFilter.includes(doc.category);
     return matchesSearch && matchesCategory;
   });
 
@@ -301,17 +300,66 @@ export default function EmployeeDocumentsPage() {
               className="flex-1 min-w-[300px] h-10"
             />
 
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-10 w-40">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-10 w-40 justify-start text-left font-normal bg-background border-border hover:bg-muted/50">
+                  <Filter className="mr-2 h-4 w-4" />
+                  {categoryFilter.length === 0 ? "All Categories" : `${categoryFilter.length} selected`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-0 bg-background border-border shadow-lg" align="start">
+                <div className="px-3 py-2 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-4 w-4 text-foreground" />
+                    <span className="text-sm font-semibold text-foreground">Categories</span>
+                  </div>
+                </div>
+                <div className="px-3 py-2 space-y-1">
+                  <div className="flex items-center space-x-3 px-2 py-1 hover:bg-muted/50 rounded-md cursor-pointer"
+                       onClick={() => setCategoryFilter([])}>
+                    <Checkbox
+                      checked={categoryFilter.length === 0}
+                      onCheckedChange={() => setCategoryFilter([])}
+                      className="border-border data-[state=checked]:bg-foreground data-[state=checked]:text-background"
+                    />
+                    <span className="text-sm font-medium text-foreground">All Categories</span>
+                  </div>
+                  {categories.map((category) => (
+                    <div key={category} className="flex items-center space-x-3 px-2 py-1 hover:bg-muted/50 rounded-md cursor-pointer"
+                         onClick={() => {
+                           if (categoryFilter.includes(category)) {
+                             setCategoryFilter(categoryFilter.filter(c => c !== category));
+                           } else {
+                             setCategoryFilter([...categoryFilter, category]);
+                           }
+                         }}>
+                      <Checkbox
+                        checked={categoryFilter.includes(category)}
+                        onCheckedChange={() => {
+                          if (categoryFilter.includes(category)) {
+                            setCategoryFilter(categoryFilter.filter(c => c !== category));
+                          } else {
+                            setCategoryFilter([...categoryFilter, category]);
+                          }
+                        }}
+                        className="border-border data-[state=checked]:bg-foreground data-[state=checked]:text-background"
+                      />
+                      <span className="text-sm font-medium text-foreground">{category}</span>
+                    </div>
+                  ))}
+                  <div className="pt-1 border-t border-border">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCategoryFilter([])}
+                      className="w-full h-7 bg-muted/50 border-border text-foreground hover:bg-muted"
+                    >
+                      Reset All
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* View Toggle */}

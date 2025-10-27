@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Clock, AlertCircle, XCircle, Calendar, GripVertical, Search, Download, LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, CalendarDays, Edit, Save, X, Plus, Share, Upload, File, Paperclip } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, XCircle, Calendar, GripVertical, Search, Download, LayoutGrid, Table2, ArrowUpDown, ArrowUp, ArrowDown, CalendarDays, Edit, Save, X, Plus, Share, Upload, File, Paperclip, Filter, Target, Calendar as CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -96,9 +97,9 @@ export default function EmployeeTasksPage() {
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const [dateFilter, setDateFilter] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState("kanban");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [sortField, setSortField] = useState<string>("");
@@ -798,17 +799,25 @@ export default function EmployeeTasksPage() {
     }
   };
 
+  // Clear all filters function
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setStatusFilter([]);
+    setPriorityFilter([]);
+    setDateFilter([]);
+  };
+
   // Filter and sort tasks based on search, filters, and sorting
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = searchTerm === "" || 
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesStatus = statusFilter === "all" || task.status === statusFilter;
-    const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter;
+    const matchesStatus = statusFilter.length === 0 || statusFilter.includes(task.status);
+    const matchesPriority = priorityFilter.length === 0 || priorityFilter.includes(task.priority);
     
     let matchesDate = true;
-    if (dateFilter !== "all" && task.due_date) {
+    if (dateFilter.length > 0 && task.due_date) {
       const taskDate = new Date(task.due_date);
       const today = new Date();
       const tomorrow = new Date(today);
@@ -816,20 +825,20 @@ export default function EmployeeTasksPage() {
       const nextWeek = new Date(today);
       nextWeek.setDate(nextWeek.getDate() + 7);
       
-      switch (dateFilter) {
-        case "today":
-          matchesDate = taskDate.toDateString() === today.toDateString();
-          break;
-        case "tomorrow":
-          matchesDate = taskDate.toDateString() === tomorrow.toDateString();
-          break;
-        case "this_week":
-          matchesDate = taskDate >= today && taskDate <= nextWeek;
-          break;
-        case "overdue":
-          matchesDate = taskDate < today;
-          break;
-      }
+      matchesDate = dateFilter.some(filter => {
+        switch (filter) {
+          case "today":
+            return taskDate.toDateString() === today.toDateString();
+          case "tomorrow":
+            return taskDate.toDateString() === tomorrow.toDateString();
+          case "this_week":
+            return taskDate >= today && taskDate <= nextWeek;
+          case "overdue":
+            return taskDate < today;
+          default:
+            return false;
+        }
+      });
     }
     
     return matchesSearch && matchesStatus && matchesPriority && matchesDate;
@@ -1241,46 +1250,217 @@ export default function EmployeeTasksPage() {
                 
                 {/* Right Side - Filters, Buttons, and View Toggle */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Status Filter */}
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                      <SelectValue placeholder="All Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Status Filter - Multi-selector */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                        <Filter className="mr-2 h-4 w-4" />
+                        {statusFilter.length === 0 ? "All Status" : `${statusFilter.length} selected`}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="start">
+                      <div className="p-3 border-b">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Status</span>
+                          {statusFilter.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setStatusFilter([])}
+                              className="h-6 px-2 text-xs"
+                            >
+                              Clear All
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="p-2">
+                          <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                               onClick={() => setStatusFilter([])}>
+                            <input
+                              type="checkbox"
+                              checked={statusFilter.length === 0}
+                              onChange={() => setStatusFilter([])}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm">All Status</span>
+                          </div>
+                          {["pending", "in_progress", "completed", "cancelled"].map((status) => (
+                            <div key={status} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                                 onClick={() => {
+                                   if (statusFilter.includes(status)) {
+                                     setStatusFilter(statusFilter.filter(s => s !== status));
+                                   } else {
+                                     setStatusFilter([...statusFilter, status]);
+                                   }
+                                 }}>
+                              <input
+                                type="checkbox"
+                                checked={statusFilter.includes(status)}
+                                onChange={() => {
+                                  if (statusFilter.includes(status)) {
+                                    setStatusFilter(statusFilter.filter(s => s !== status));
+                                  } else {
+                                    setStatusFilter([...statusFilter, status]);
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm capitalize">{status.replace('_', ' ')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   
-                  {/* Priority Filter */}
-                  <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                      <SelectValue placeholder="All Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Priority</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Priority Filter - Multi-selector */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                        <Target className="mr-2 h-4 w-4" />
+                        {priorityFilter.length === 0 ? "All Priority" : `${priorityFilter.length} selected`}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="start">
+                      <div className="p-3 border-b">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Priority</span>
+                          {priorityFilter.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPriorityFilter([])}
+                              className="h-6 px-2 text-xs"
+                            >
+                              Clear All
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="p-2">
+                          <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                               onClick={() => setPriorityFilter([])}>
+                            <input
+                              type="checkbox"
+                              checked={priorityFilter.length === 0}
+                              onChange={() => setPriorityFilter([])}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm">All Priority</span>
+                          </div>
+                          {["high", "medium", "low"].map((priority) => (
+                            <div key={priority} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                                 onClick={() => {
+                                   if (priorityFilter.includes(priority)) {
+                                     setPriorityFilter(priorityFilter.filter(p => p !== priority));
+                                   } else {
+                                     setPriorityFilter([...priorityFilter, priority]);
+                                   }
+                                 }}>
+                              <input
+                                type="checkbox"
+                                checked={priorityFilter.includes(priority)}
+                                onChange={() => {
+                                  if (priorityFilter.includes(priority)) {
+                                    setPriorityFilter(priorityFilter.filter(p => p !== priority));
+                                  } else {
+                                    setPriorityFilter([...priorityFilter, priority]);
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm capitalize">{priority}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   
-                  {/* Date Filter */}
-                  <Select value={dateFilter} onValueChange={setDateFilter}>
-                    <SelectTrigger className="w-[120px] bg-background border-muted-foreground/30 text-foreground">
-                      <SelectValue placeholder="All Dates" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Dates</SelectItem>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="tomorrow">Tomorrow</SelectItem>
-                      <SelectItem value="this_week">This Week</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {/* Date Filter - Multi-selector */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[140px] h-9 justify-start text-left font-normal text-sm bg-background border-muted-foreground/30 text-foreground">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFilter.length === 0 ? "All Dates" : `${dateFilter.length} selected`}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="start">
+                      <div className="p-3 border-b">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Date</span>
+                          {dateFilter.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDateFilter([])}
+                              className="h-6 px-2 text-xs"
+                            >
+                              Clear All
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="p-2">
+                          <div className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                               onClick={() => setDateFilter([])}>
+                            <input
+                              type="checkbox"
+                              checked={dateFilter.length === 0}
+                              onChange={() => setDateFilter([])}
+                              className="rounded border-gray-300"
+                            />
+                            <span className="text-sm">All Dates</span>
+                          </div>
+                          {[
+                            { value: "today", label: "Today" },
+                            { value: "tomorrow", label: "Tomorrow" },
+                            { value: "this_week", label: "This Week" },
+                            { value: "overdue", label: "Overdue" }
+                          ].map((date) => (
+                            <div key={date.value} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded-md cursor-pointer"
+                                 onClick={() => {
+                                   if (dateFilter.includes(date.value)) {
+                                     setDateFilter(dateFilter.filter(d => d !== date.value));
+                                   } else {
+                                     setDateFilter([...dateFilter, date.value]);
+                                   }
+                                 }}>
+                              <input
+                                type="checkbox"
+                                checked={dateFilter.includes(date.value)}
+                                onChange={() => {
+                                  if (dateFilter.includes(date.value)) {
+                                    setDateFilter(dateFilter.filter(d => d !== date.value));
+                                  } else {
+                                    setDateFilter([...dateFilter, date.value]);
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <span className="text-sm">{date.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Clear All Filters Button */}
+                  {(searchTerm || statusFilter.length > 0 || priorityFilter.length > 0 || dateFilter.length > 0) && (
+                    <Button 
+                      variant="outline" 
+                      className="gap-2 h-9 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 bg-background border-muted-foreground/30"
+                      onClick={clearAllFilters}
+                    >
+                      <X className="h-4 w-4" />
+                      Clear All
+                    </Button>
+                  )}
                   
                   {/* Create Task Button */}
                   <Button 
