@@ -72,6 +72,8 @@ type Employee = {
   leads?: any;
   linkedin_profile?: string;
   monthly_payroll?: any;
+  job_title?: string;
+  reporting_manager?: string;
   official_contact_number?: string;
   official_email: string;
   official_number?: string;
@@ -87,6 +89,12 @@ type Employee = {
   users?: any;
   Notes?: string;
   Announcement?: any;
+  department?: {
+    whalesync_postgres_id: string;
+    department_name: string;
+    display_name?: string;
+    headcount?: number;
+  } | null;
 };
 
 export default function AdminEmployeesPage() {
@@ -122,9 +130,17 @@ export default function AdminEmployeesPage() {
         setLoading(true);
         console.log('Fetching employee data for admin...');
         
+        // Fetch employees with reporting manager data
         const { data: employeesData, error: employeesError } = await supabase
           .from('Employee Directory')
-          .select('*');
+          .select(`
+            *,
+            reporting_manager:reporting_manager(
+              whalesync_postgres_id,
+              full_name,
+              job_title
+            )
+          `);
         
         if (employeesError) {
           console.error('Employee Directory fetch error:', employeesError);
@@ -134,19 +150,39 @@ export default function AdminEmployeesPage() {
         console.log('Raw employees data received:', employeesData?.length || 0, 'records');
 
         // Process employee data
-        const safeEmployeesData = (employeesData || []).map((emp, index) => ({
-          ...emp,
-          whalesync_postgres_id: emp.whalesync_postgres_id || `emp_${index}`,
-          full_name: emp.full_name || `Unnamed Employee ${index}`,
-          official_email: emp.official_email || '',
-          employment_type: emp.employment_type || 'Full-time',
-          status: emp.status || 'Active',
-          profile_photo: emp.profile_photo || null,
-          date_of_joining: emp.date_of_joining || null,
-          work_mode: emp.work_mode || 'Office'
-        }));
+        const safeEmployeesData = (employeesData || []).map((emp, index) => {
+          console.log(`Employee ${emp.full_name}:`, {
+            jobTitle: emp.job_title,
+            reportingManager: emp.reporting_manager
+          });
+          
+          return {
+            ...emp,
+            whalesync_postgres_id: emp.whalesync_postgres_id || `emp_${index}`,
+            full_name: emp.full_name || `Unnamed Employee ${index}`,
+            official_email: emp.official_email || '',
+            employment_type: emp.employment_type || 'Full-time',
+            status: emp.status || 'Active',
+            profile_photo: emp.profile_photo || null,
+            date_of_joining: emp.date_of_joining || null,
+            work_mode: emp.work_mode || 'Office',
+            job_title: emp.job_title || null,
+            reporting_manager: emp.reporting_manager?.full_name || emp.reporting_manager || null
+          };
+        });
 
         console.log('Processed employees data:', safeEmployeesData.length, 'records');
+        
+        // Debug: Show first few employees with their job and manager data
+        console.log('=== EMPLOYEE DEBUG INFO ===');
+        safeEmployeesData.slice(0, 3).forEach((emp, index) => {
+          console.log(`Employee ${index + 1}: ${emp.full_name}`);
+          console.log('  - Job Title:', emp.job_title);
+          console.log('  - Reporting Manager:', emp.reporting_manager);
+          console.log('  - Raw employee data keys:', Object.keys(emp));
+        });
+        console.log('=== END DEBUG INFO ===');
+        
         setEmployees(safeEmployeesData);
         setFilteredEmployees(safeEmployeesData);
         toast.success(`Loaded ${safeEmployeesData.length} employees`);
@@ -197,6 +233,14 @@ export default function AdminEmployeesPage() {
           case 'work_mode':
             aValue = a.work_mode || '';
             bValue = b.work_mode || '';
+            break;
+          case 'reporting_manager':
+            aValue = a.reporting_manager || '';
+            bValue = b.reporting_manager || '';
+            break;
+          case 'job_title':
+            aValue = a.job_title || '';
+            bValue = b.job_title || '';
             break;
           case 'date_of_joining':
             aValue = a.date_of_joining || '';
@@ -458,6 +502,26 @@ export default function AdminEmployeesPage() {
                             <TableHead>
                               <Button
                                 variant="ghost"
+                                onClick={() => handleSort('reporting_manager')}
+                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                              >
+                                Reporting Manager
+                                {renderSortIcon('reporting_manager')}
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
+                                onClick={() => handleSort('job_title')}
+                                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+                              >
+                                Job Type
+                                {renderSortIcon('job_title')}
+                              </Button>
+                            </TableHead>
+                            <TableHead>
+                              <Button
+                                variant="ghost"
                                 onClick={() => handleSort('date_of_joining')}
                                 className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
                               >
@@ -506,6 +570,16 @@ export default function AdminEmployeesPage() {
                                 <Badge variant="outline">
                                   {emp.work_mode || 'Not specified'}
                                 </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">
+                                  {emp.reporting_manager || 'Not Assigned'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm">
+                                  {emp.job_title || 'Not Specified'}
+                                </span>
                               </TableCell>
                               <TableCell>
                                 <span className="text-xs">{emp.date_of_joining ? new Date(emp.date_of_joining).toLocaleDateString() : 'Not specified'}</span>

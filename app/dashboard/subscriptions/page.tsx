@@ -501,16 +501,6 @@ function SubscriptionsPageContent() {
           <div className="flex-1 overflow-hidden p-1">
             {/* Navigation */}
             <div className="flex items-center gap-4 mb-1">
-              {currentPage === 'details' && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setCurrentPage('subscriptions')}
-                  className="flex items-center gap-2"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to List
-                </Button>
-              )}
             </div>
 
             {/* Dashboard Page */}
@@ -1324,7 +1314,17 @@ function SubscriptionsPageContent() {
             {currentPage === 'details' && selectedSubscription && (
               <div className="space-y-6 overflow-y-auto h-full">
                 <Card>
-                  <CardContent className="p-8">
+                  <CardContent className="px-8 pt-0 pb-8">
+                    <div className="mb-0">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setCurrentPage('subscriptions')}
+                        className="flex items-center gap-2"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to List
+                      </Button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                       <div className="md:col-span-1 flex flex-col items-center md:items-start">
                         <Avatar className="w-32 h-32 mb-4">
@@ -1456,7 +1456,7 @@ function SubscriptionsPageContent() {
 
         {/* Create Subscription Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add New Subscription</DialogTitle>
               <DialogDescription>
@@ -1466,7 +1466,7 @@ function SubscriptionsPageContent() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="subscriptionName">Subscription Name *</Label>
+                  <Label htmlFor="subscriptionName" className="pt-1 block">Subscription Name *</Label>
                   <Input
                     id="subscriptionName"
                     value={newSubscription.subscription_name}
@@ -1475,7 +1475,7 @@ function SubscriptionsPageContent() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="vendor">Vendor</Label>
+                  <Label htmlFor="vendor" className="pt-1 block">Vendor</Label>
                   <Select
                     value={newSubscription.vendor_id}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, vendor_id: value })}
@@ -1496,7 +1496,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="planTier">Plan/Tier</Label>
+                  <Label htmlFor="planTier" className="pt-1 block">Plan/Tier</Label>
                   <Select
                     value={newSubscription.plan_tier}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, plan_tier: value })}
@@ -1513,7 +1513,7 @@ function SubscriptionsPageContent() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category" className="pt-1 block">Category</Label>
                   <Select
                     value={newSubscription.category}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, category: value })}
@@ -1532,7 +1532,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="costPerPeriod">Cost per Period (₹)</Label>
+                  <Label htmlFor="costPerPeriod" className="pt-1 block">Cost per Period (₹)</Label>
                   <Input
                     id="costPerPeriod"
                     type="number"
@@ -1542,7 +1542,7 @@ function SubscriptionsPageContent() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="billingCycle">Billing Cycle</Label>
+                  <Label htmlFor="billingCycle" className="pt-1 block">Billing Cycle</Label>
                   <Select
                     value={newSubscription.billing_cycle}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, billing_cycle: value })}
@@ -1563,7 +1563,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="costPerUser">Cost per User (₹)</Label>
+                  <Label htmlFor="costPerUser" className="pt-1 block">Cost per User (₹)</Label>
                   <Input
                     id="costPerUser"
                     type="number"
@@ -1573,7 +1573,7 @@ function SubscriptionsPageContent() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="owner">Owner/Responsible Person *</Label>
+                  <Label htmlFor="owner" className="pt-1 block">Owner/Responsible Person *</Label>
                   <Select
                     value={newSubscription.owner_id}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, owner_id: value })}
@@ -1595,7 +1595,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="startDate">Start Date</Label>
+                  <Label htmlFor="startDate" className="pt-1 block">Start Date</Label>
                   <Input
                     id="startDate"
                     type="date"
@@ -1604,7 +1604,7 @@ function SubscriptionsPageContent() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="expiryDate">Expiry Date</Label>
+                  <Label htmlFor="expiryDate" className="pt-1 block">Expiry Date</Label>
                   <Input
                     id="expiryDate"
                     type="date"
@@ -1616,7 +1616,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="autoRenewalStatus">Auto-Renewal Status</Label>
+                  <Label htmlFor="autoRenewalStatus" className="pt-1 block">Auto-Renewal Status</Label>
                   <Select
                     value={newSubscription.auto_renewal_status}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, auto_renewal_status: value })}
@@ -1632,7 +1632,7 @@ function SubscriptionsPageContent() {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status" className="pt-1 block">Status</Label>
                   <Select
                     value={newSubscription.status}
                     onValueChange={(value) => setNewSubscription({ ...newSubscription, status: value })}
@@ -1651,7 +1651,7 @@ function SubscriptionsPageContent() {
               </div>
 
               <div>
-                <Label htmlFor="users">Assign Users</Label>
+                <Label htmlFor="users" className="pt-1 block">Assign Users</Label>
                 <Select
                   value=""
                   onValueChange={(value) => {
@@ -1698,7 +1698,7 @@ function SubscriptionsPageContent() {
               </div>
 
               <div>
-                <Label htmlFor="portalUrl">Portal URL</Label>
+                <Label htmlFor="portalUrl" className="pt-1 block">Portal URL</Label>
                 <Input
                   id="portalUrl"
                   type="url"
@@ -1709,7 +1709,7 @@ function SubscriptionsPageContent() {
               </div>
 
               <div>
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes" className="pt-1 block">Notes</Label>
                 <Textarea
                   id="notes"
                   rows={3}
@@ -1720,7 +1720,7 @@ function SubscriptionsPageContent() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="credentialsEmail">Credentials Email</Label>
+                  <Label htmlFor="credentialsEmail" className="pt-1 block">Credentials Email</Label>
                   <Input
                     id="credentialsEmail"
                     type="email"
@@ -1732,7 +1732,7 @@ function SubscriptionsPageContent() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="credentialsPassword">Credentials Password</Label>
+                  <Label htmlFor="credentialsPassword" className="pt-1 block">Credentials Password</Label>
                   <Input
                     id="credentialsPassword"
                     type="password"

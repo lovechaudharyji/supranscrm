@@ -171,3 +171,18 @@
   scrollbar-gutter: stable;
   padding-right: 8px;
 }
+
+/* Custom animation for announcement banner right-to-left movement */
+@keyframes slide-left {
+  0% {
+    transform: translateX(100%); /* Start off-screen right */
+  }
+  100% {
+    transform: translateX(-100%); /* End off-screen left */
+  }
+}
+
+/* Apply the animation */
+.animate-slide-left {
+  animation: slide-left 15s linear infinite;
+}

@@ -169,16 +169,34 @@ export default function TaskManagerPage() {
       if (data && data.length > 0) {
         // Upload files if any
         if (createAttachments.length > 0) {
-          const uploadedFiles = await uploadFilesToSupabase(createAttachments, data[0].id);
-          
-          // Update task with attachments
-          const { error: updateError } = await supabase
-            .from("tasks")
-            .update({ attachments: uploadedFiles })
-            .eq("id", data[0].id);
-          
-          if (updateError) {
-            console.error("Error updating task with attachments:", updateError);
+          try {
+            console.log("Uploading files for task:", data[0].id, "Files:", createAttachments.length);
+            const uploadedFiles = await uploadFilesToSupabase(createAttachments, data[0].id);
+            console.log("Uploaded files result:", uploadedFiles);
+            
+            // Update task with attachments
+            const { error: updateError } = await supabase
+              .from("tasks")
+              .update({ attachments: uploadedFiles })
+              .eq("id", data[0].id);
+            
+            if (updateError) {
+              console.error("Error updating task with attachments:", {
+                message: updateError.message,
+                code: updateError.code,
+                hint: updateError.hint,
+                details: updateError.details
+              });
+              toast.error(`Failed to update task with attachments: ${updateError.message}`);
+            } else {
+              console.log("Successfully updated task with attachments");
+            }
+          } catch (uploadError: any) {
+            console.error("Error in file upload process:", {
+              message: uploadError.message,
+              stack: uploadError.stack
+            });
+            toast.error(`Failed to upload attachments: ${uploadError.message}`);
           }
         }
 
@@ -356,17 +374,53 @@ export default function TaskManagerPage() {
   const uploadFilesToSupabase = async (files: File[], taskId: string) => {
     const uploadedFiles = [];
     
+    console.log(`Starting upload of ${files.length} files for task ${taskId}`);
+    
+    // Check if storage bucket exists
+    try {
+      const { data: buckets, error: bucketError } = await supabase.storage.listBuckets();
+      if (bucketError) {
+        console.error('Error listing buckets:', bucketError);
+        throw new Error(`Storage bucket error: ${bucketError.message}`);
+      }
+      
+      const documentsBucket = buckets?.find(bucket => bucket.name === 'documents');
+      if (!documentsBucket) {
+        console.error('Documents bucket not found. Available buckets:', buckets?.map(b => b.name));
+        throw new Error('Documents storage bucket not found. Please check your Supabase storage configuration.');
+      }
+      
+      console.log('Documents bucket found:', documentsBucket);
+    } catch (bucketCheckError: any) {
+      console.error('Bucket check failed:', bucketCheckError);
+      toast.error(`Storage configuration error: ${bucketCheckError.message}`);
+      return uploadedFiles;
+    }
+    
     for (const file of files) {
       try {
+        console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+        
         const fileExt = file.name.split('.').pop();
         const fileName = `${taskId}-${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `task-attachments/${fileName}`;
+        
+        console.log(`File path: ${filePath}`);
         
         const { data, error } = await supabase.storage
           .from('documents')
           .upload(filePath, file);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase storage error:', {
+            message: error.message,
+            code: error.statusCode,
+            error: error.error
+          });
+          throw error;
+        }
+        
+        console.log(`Successfully uploaded: ${file.name}`);
         
         uploadedFiles.push({
           name: file.name,
@@ -375,11 +429,18 @@ export default function TaskManagerPage() {
           type: file.type
         });
       } catch (error: any) {
-        console.error('Error uploading file:', error);
+        console.error('Error uploading file:', {
+          fileName: file.name,
+          error: error.message,
+          code: error.code,
+          statusCode: error.statusCode
+        });
         toast.error(`Failed to upload ${file.name}: ${error.message}`);
+        // Continue with other files instead of stopping
       }
     }
     
+    console.log(`Upload complete. ${uploadedFiles.length} files uploaded successfully`);
     return uploadedFiles;
   };
 
@@ -649,40 +710,35 @@ export default function TaskManagerPage() {
                 {/* Status Filter */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-[140px] justify-between">
+                    <Button variant="outline" className="w-[140px] justify-between bg-background border-border hover:bg-muted/50">
                       {statusFilter.length === 0 ? "All Status" : `${statusFilter.length} selected`}
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56">
-                    <div className="flex items-center justify-between p-2">
-                      <span className="text-sm font-medium">Status Filter</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setStatusFilter([])}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Clear All
-                      </Button>
+                  <DropdownMenuContent className="w-56 bg-background border-border shadow-lg">
+                    <div className="px-4 py-3 border-b border-border">
+                      <span className="text-sm font-semibold text-foreground">Filter by Status</span>
                     </div>
-                    <div className="space-y-1 p-2">
+                    <div className="py-2">
                       {["pending", "in_progress", "completed", "cancelled"].map((status) => (
-                        <div key={status} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`status-${status}`}
-                            checked={statusFilter.includes(status)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setStatusFilter([...statusFilter, status]);
-                              } else {
-                                setStatusFilter(statusFilter.filter(s => s !== status));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`status-${status}`} className="text-sm capitalize">
-                            {status.replace('_', ' ')}
-                          </Label>
+                        <div key={status} className="px-4 py-2 hover:bg-muted/50 cursor-pointer">
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              id={`status-${status}`}
+                              checked={statusFilter.includes(status)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setStatusFilter([...statusFilter, status]);
+                                } else {
+                                  setStatusFilter(statusFilter.filter(s => s !== status));
+                                }
+                              }}
+                              className="border-border"
+                            />
+                            <Label htmlFor={`status-${status}`} className="text-sm text-foreground cursor-pointer capitalize">
+                              {status.replace('_', ' ')}
+                            </Label>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -692,40 +748,35 @@ export default function TaskManagerPage() {
                 {/* Priority Filter */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-[140px] justify-between">
+                    <Button variant="outline" className="w-[140px] justify-between bg-background border-border hover:bg-muted/50">
                       {priorityFilter.length === 0 ? "All Priority" : `${priorityFilter.length} selected`}
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56">
-                    <div className="flex items-center justify-between p-2">
-                      <span className="text-sm font-medium">Priority Filter</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPriorityFilter([])}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Clear All
-                      </Button>
+                  <DropdownMenuContent className="w-56 bg-background border-border shadow-lg">
+                    <div className="px-4 py-3 border-b border-border">
+                      <span className="text-sm font-semibold text-foreground">Filter by Priority</span>
                     </div>
-                    <div className="space-y-1 p-2">
+                    <div className="py-2">
                       {["low", "medium", "high"].map((priority) => (
-                        <div key={priority} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`priority-${priority}`}
-                            checked={priorityFilter.includes(priority)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setPriorityFilter([...priorityFilter, priority]);
-                              } else {
-                                setPriorityFilter(priorityFilter.filter(p => p !== priority));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`priority-${priority}`} className="text-sm capitalize">
-                            {priority}
-                          </Label>
+                        <div key={priority} className="px-4 py-2 hover:bg-muted/50 cursor-pointer">
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              id={`priority-${priority}`}
+                              checked={priorityFilter.includes(priority)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setPriorityFilter([...priorityFilter, priority]);
+                                } else {
+                                  setPriorityFilter(priorityFilter.filter(p => p !== priority));
+                                }
+                              }}
+                              className="border-border"
+                            />
+                            <Label htmlFor={`priority-${priority}`} className="text-sm text-foreground cursor-pointer capitalize">
+                              {priority}
+                            </Label>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -735,40 +786,35 @@ export default function TaskManagerPage() {
                 {/* Time Filter */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-[140px] justify-between">
+                    <Button variant="outline" className="w-[140px] justify-between bg-background border-border hover:bg-muted/50">
                       {timeFilter.length === 0 ? "All Time" : `${timeFilter.length} selected`}
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56">
-                    <div className="flex items-center justify-between p-2">
-                      <span className="text-sm font-medium">Time Filter</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setTimeFilter([])}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Clear All
-                      </Button>
+                  <DropdownMenuContent className="w-56 bg-background border-border shadow-lg">
+                    <div className="px-4 py-3 border-b border-border">
+                      <span className="text-sm font-semibold text-foreground">Filter by Time</span>
                     </div>
-                    <div className="space-y-1 p-2">
+                    <div className="py-2">
                       {["today", "week", "month", "overdue"].map((time) => (
-                        <div key={time} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`time-${time}`}
-                            checked={timeFilter.includes(time)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setTimeFilter([...timeFilter, time]);
-                              } else {
-                                setTimeFilter(timeFilter.filter(t => t !== time));
-                              }
-                            }}
-                          />
-                          <Label htmlFor={`time-${time}`} className="text-sm capitalize">
-                            {time === "week" ? "This Week" : time === "month" ? "This Month" : time}
-                          </Label>
+                        <div key={time} className="px-4 py-2 hover:bg-muted/50 cursor-pointer">
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              id={`time-${time}`}
+                              checked={timeFilter.includes(time)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setTimeFilter([...timeFilter, time]);
+                                } else {
+                                  setTimeFilter(timeFilter.filter(t => t !== time));
+                                }
+                              }}
+                              className="border-border"
+                            />
+                            <Label htmlFor={`time-${time}`} className="text-sm text-foreground cursor-pointer capitalize">
+                              {time === "week" ? "This Week" : time === "month" ? "This Month" : time}
+                            </Label>
+                          </div>
                         </div>
                       ))}
                     </div>

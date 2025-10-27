@@ -59,7 +59,7 @@ interface AttendanceRecord {
   id: string;
   employee_name: string;
   employee_id: string;
-  department: string;
+  job_title: string;
   date: string;
   status: string;
   time_in: string;
@@ -101,11 +101,19 @@ export default function AdminAttendancePage() {
   const [dateRange, setDateRange] = useState("7");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [departmentFilter, setDepartmentFilter] = useState<string[]>([]);
+  const [jobTitleFilter, setJobTitleFilter] = useState<string[]>([]);
   const [timeFilter, setTimeFilter] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState("october");
+  const [selectedYear, setSelectedYear] = useState("2024");
+  const [monthlyStats, setMonthlyStats] = useState({
+    present: 0,
+    absent: 0,
+    halfDay: 0,
+    attendanceRate: 0
+  });
   const [visibleColumns, setVisibleColumns] = useState({
     employee: true,
-    department: true,
+    job_title: true,
     date: true,
     status: true,
     timeIn: true,
@@ -243,7 +251,7 @@ export default function AdminAttendancePage() {
           whalesync_postgres_id,
           full_name,
           employee_id,
-          department,
+          job_title,
           profile_photo,
           official_email,
           status
@@ -252,26 +260,75 @@ export default function AdminAttendancePage() {
       
       if (employeesError) {
         console.error('Error fetching employees:', employeesError);
+        console.error('Employee error details:', {
+          message: employeesError.message,
+          code: employeesError.code,
+          hint: employeesError.hint,
+          details: employeesError.details
+        });
         throw employeesError;
       }
       
-      // Fetch teams (departments)
-      const { data: departmentsData, error: departmentsError } = await supabase
-        .from('Teams')
-        .select('whalesync_postgres_id, team_name');
+      console.log("Successfully fetched employees:", employeesData?.length || 0, "records");
+      
+      // Fetch departments - try different table names
+      let departmentsData = null;
+      let departmentsError = null;
+      
+      // Try 'Departments' table first
+      const { data: deptData, error: deptError } = await supabase
+        .from('Departments')
+        .select('whalesync_postgres_id, department_name, display_name');
+      
+      if (deptError) {
+        console.log('Departments table not found, trying alternative...');
+        // Try 'Teams' table as fallback
+        const { data: teamData, error: teamError } = await supabase
+          .from('Teams')
+          .select('whalesync_postgres_id, team_name');
+        
+        if (teamError) {
+          console.log('Teams table not found, using empty departments...');
+          departmentsData = [];
+          departmentsError = null;
+        } else {
+          departmentsData = teamData;
+          departmentsError = null;
+        }
+      } else {
+        departmentsData = deptData;
+        departmentsError = deptError;
+      }
       
       if (departmentsError) {
         console.error('Error fetching departments:', departmentsError);
+        console.error('Department error details:', {
+          message: departmentsError.message,
+          code: departmentsError.code,
+          hint: departmentsError.hint,
+          details: departmentsError.details
+        });
         throw departmentsError;
       }
       
-      // Create department lookup using Teams table structure
+      console.log("Successfully fetched departments:", departmentsData?.length || 0, "records");
+      
+      // Create department lookup - handle both Departments and Teams table structures
       const departmentLookup = {};
-      departmentsData?.forEach(team => {
-        // Map by team whalesync_postgres_id (this should match the UUIDs in employee.department)
-        departmentLookup[team.whalesync_postgres_id] = team.team_name;
-        // Also map by team_name in case the employee.department field contains team names
-        departmentLookup[team.team_name] = team.team_name;
+      departmentsData?.forEach(dept => {
+        // Handle Departments table structure
+        if (dept.department_name) {
+          departmentLookup[dept.whalesync_postgres_id] = dept.department_name;
+          departmentLookup[dept.department_name] = dept.department_name;
+          if (dept.display_name) {
+            departmentLookup[dept.display_name] = dept.department_name;
+          }
+        }
+        // Handle Teams table structure
+        else if (dept.team_name) {
+          departmentLookup[dept.whalesync_postgres_id] = dept.team_name;
+          departmentLookup[dept.team_name] = dept.team_name;
+        }
       });
       
       console.log("Department lookup created:", departmentLookup);
@@ -282,13 +339,12 @@ export default function AdminAttendancePage() {
       
       // Transform employees data
       const transformedEmployees = employeesData?.map(emp => {
-        const departmentName = departmentLookup[emp.department] || (emp.department ? `Raw: ${emp.department}` : 'No Department');
-        console.log(`Employee ${emp.full_name}: department field = "${emp.department}", resolved to = "${departmentName}"`);
+        console.log(`Employee ${emp.full_name}: job_title = "${emp.job_title}"`);
         return {
           whalesync_postgres_id: emp.whalesync_postgres_id,
           full_name: emp.full_name,
           employee_id: emp.employee_id,
-          department: departmentName,
+          job_title: emp.job_title || 'No Job Title',
           profile_photo: emp.profile_photo,
           official_email: emp.official_email
         };
@@ -311,33 +367,58 @@ export default function AdminAttendancePage() {
           notes,
           employee,
           employee_id_from_employee,
-          full_name_from_employee,
-          department_name_from_employee
+          full_name_from_employee
         `)
         .order('date', { ascending: false })
         .limit(200); // Get more records for admin view
       
       if (attendanceError) {
         console.error('Error fetching attendance:', attendanceError);
+        console.error('Attendance error details:', {
+          message: attendanceError.message,
+          code: attendanceError.code,
+          hint: attendanceError.hint,
+          details: attendanceError.details
+        });
         throw attendanceError;
       }
       
+      console.log("Successfully fetched attendance records:", attendanceData?.length || 0, "records");
+      
+      // Debug: Show unique employees in attendance data
+      const uniqueEmployeesInAttendance = [...new Set(attendanceData?.map(record => record.employee_name) || [])];
+      console.log("Unique employees in attendance data:", uniqueEmployeesInAttendance.length);
+      console.log("Employee names in attendance:", uniqueEmployeesInAttendance);
+      
+      // Debug: Show total employees fetched
+      console.log("Total employees fetched from Employee Directory:", transformedEmployees.length);
+      console.log("Employee names from Employee Directory:", transformedEmployees.map(emp => emp.full_name));
+      
       // Transform attendance data
-      const transformedAttendance = attendanceData?.map(record => ({
-        id: record.whalesync_postgres_id,
-        employee_name: record.full_name_from_employee || 'Unknown',
-        employee_id: record.employee_id_from_employee || 'Unknown',
-        department: departmentLookup[record.department_name_from_employee] || (record.department_name_from_employee ? `Raw: ${record.department_name_from_employee}` : 'No Department'),
-        date: record.date,
-        status: record.status || 'Not Marked',
-        time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : 'N/A',
-        time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : 'N/A',
-        working_hours: record.working_hours || 0,
-        punctuality_status: record.punctuality_status || 'Not Marked',
-        marked_by: 'HR',
-        marked_at: new Date().toISOString(),
-        notes: record.notes || ''
-      })) || [];
+      const transformedAttendance = attendanceData?.map(record => {
+        // Find the employee's job title from the employees data
+        const employee = transformedEmployees.find(emp => 
+          emp.whalesync_postgres_id === record.employee || 
+          emp.employee_id === record.employee_id_from_employee
+        );
+        const jobTitle = employee?.job_title || 'No Job Title';
+        
+        return {
+          id: record.whalesync_postgres_id,
+          employee_name: record.full_name_from_employee || 'Unknown',
+          employee_id: record.employee_id_from_employee || 'Unknown',
+          job_title: jobTitle,
+          date: record.date,
+          status: record.status || 'Not Marked',
+          time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : 'N/A',
+          time_out: record.time_out ? `${Math.floor(record.time_out)}:${String(Math.round((record.time_out % 1) * 60)).padStart(2, '0')}` : 'N/A',
+          working_hours: record.working_hours || 0,
+          punctuality_status: record.punctuality_status || 'Not Marked',
+          marked_by: 'HR',
+          marked_at: new Date().toISOString(),
+          notes: record.notes || ''
+        };
+      }) || [];
       
       console.log("Real attendance data:", transformedAttendance);
       
@@ -346,100 +427,22 @@ export default function AdminAttendancePage() {
     } catch (error) {
       console.error("Error loading dashboard data:", error);
       console.error("Error details:", JSON.stringify(error, null, 2));
+      
+      // Show error message and empty state
+      setEmployees([]);
+      setAttendanceData([]);
+      setFilteredData([]);
+      setDepartmentStats([]);
+      setExceptionAlerts([]);
+      
       toast.error(`Failed to load attendance data: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateMockEmployeeData = () => {
-    return [
-      { whalesync_postgres_id: "1", full_name: "John Smith", department: "Sales" },
-      { whalesync_postgres_id: "2", full_name: "Sarah Johnson", department: "Marketing" },
-      { whalesync_postgres_id: "3", full_name: "Mike Wilson", department: "Sales" },
-      { whalesync_postgres_id: "4", full_name: "Emily Davis", department: "HR" },
-      { whalesync_postgres_id: "5", full_name: "David Brown", department: "IT" },
-      { whalesync_postgres_id: "6", full_name: "Lisa Anderson", department: "Marketing" },
-      { whalesync_postgres_id: "7", full_name: "Tom Miller", department: "Sales" },
-      { whalesync_postgres_id: "8", full_name: "Anna Garcia", department: "HR" },
-      { whalesync_postgres_id: "9", full_name: "Chris Lee", department: "IT" },
-      { whalesync_postgres_id: "10", full_name: "Maria Rodriguez", department: "Finance" }
-    ];
-  };
 
-  const generateMockAttendanceData = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    
-    const employees = [
-      { id: "1", name: "John Smith", employee_id: "EMP001", department: "Sales" },
-      { id: "2", name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing" },
-      { id: "3", name: "Mike Wilson", employee_id: "EMP003", department: "Sales" },
-      { id: "4", name: "Emily Davis", employee_id: "EMP004", department: "HR" },
-      { id: "5", name: "David Brown", employee_id: "EMP005", department: "IT" },
-      { id: "6", name: "Lisa Anderson", employee_id: "EMP006", department: "Marketing" },
-      { id: "7", name: "Tom Miller", employee_id: "EMP007", department: "Sales" },
-      { id: "8", name: "Anna Garcia", employee_id: "EMP008", department: "HR" },
-      { id: "9", name: "Chris Lee", employee_id: "EMP009", department: "IT" },
-      { id: "10", name: "Maria Rodriguez", employee_id: "EMP010", department: "Finance" }
-    ];
 
-    // Deterministic data to avoid hydration mismatch
-    const attendanceData = [
-      // John Smith
-      { id: "1_today", employee_name: "John Smith", employee_id: "EMP001", department: "Sales", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "1_yesterday", employee_name: "John Smith", employee_id: "EMP001", department: "Sales", date: yesterday, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "1_twoDaysAgo", employee_name: "John Smith", employee_id: "EMP001", department: "Sales", date: twoDaysAgo, status: "Present", time_in: "09:15", time_out: "17:30", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Sarah Johnson
-      { id: "2_today", employee_name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", date: today, status: "Present", time_in: "09:30", time_out: "18:00", working_hours: 8.5, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "2_yesterday", employee_name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", date: yesterday, status: "Half Day", time_in: "09:00", time_out: "13:00", working_hours: 4, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "Medical appointment" },
-      { id: "2_twoDaysAgo", employee_name: "Sarah Johnson", employee_id: "EMP002", department: "Marketing", date: twoDaysAgo, status: "Present", time_in: "08:30", time_out: "17:00", working_hours: 8.5, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Mike Wilson
-      { id: "3_today", employee_name: "Mike Wilson", employee_id: "EMP003", department: "Sales", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "3_yesterday", employee_name: "Mike Wilson", employee_id: "EMP003", department: "Sales", date: yesterday, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "3_twoDaysAgo", employee_name: "Mike Wilson", employee_id: "EMP003", department: "Sales", date: twoDaysAgo, status: "Absent", time_in: "N/A", time_out: "N/A", working_hours: 0, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "Sick leave" },
-      
-      // Emily Davis
-      { id: "4_today", employee_name: "Emily Davis", employee_id: "EMP004", department: "HR", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "4_yesterday", employee_name: "Emily Davis", employee_id: "EMP004", department: "HR", date: yesterday, status: "Present", time_in: "08:30", time_out: "17:30", working_hours: 9, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "4_twoDaysAgo", employee_name: "Emily Davis", employee_id: "EMP004", department: "HR", date: twoDaysAgo, status: "Present", time_in: "09:15", time_out: "17:15", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // David Brown
-      { id: "5_today", employee_name: "David Brown", employee_id: "EMP005", department: "IT", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "5_yesterday", employee_name: "David Brown", employee_id: "EMP005", department: "IT", date: yesterday, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "5_twoDaysAgo", employee_name: "David Brown", employee_id: "EMP005", department: "IT", date: twoDaysAgo, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Lisa Anderson
-      { id: "6_today", employee_name: "Lisa Anderson", employee_id: "EMP006", department: "Marketing", date: today, status: "Present", time_in: "09:30", time_out: "18:00", working_hours: 8.5, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "6_yesterday", employee_name: "Lisa Anderson", employee_id: "EMP006", department: "Marketing", date: yesterday, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "6_twoDaysAgo", employee_name: "Lisa Anderson", employee_id: "EMP006", department: "Marketing", date: twoDaysAgo, status: "Present", time_in: "08:30", time_out: "17:30", working_hours: 9, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Tom Miller
-      { id: "7_today", employee_name: "Tom Miller", employee_id: "EMP007", department: "Sales", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "7_yesterday", employee_name: "Tom Miller", employee_id: "EMP007", department: "Sales", date: yesterday, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "7_twoDaysAgo", employee_name: "Tom Miller", employee_id: "EMP007", department: "Sales", date: twoDaysAgo, status: "Present", time_in: "09:15", time_out: "17:15", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Anna Garcia
-      { id: "8_today", employee_name: "Anna Garcia", employee_id: "EMP008", department: "HR", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "8_yesterday", employee_name: "Anna Garcia", employee_id: "EMP008", department: "HR", date: yesterday, status: "Present", time_in: "08:30", time_out: "17:30", working_hours: 9, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "8_twoDaysAgo", employee_name: "Anna Garcia", employee_id: "EMP008", department: "HR", date: twoDaysAgo, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Chris Lee
-      { id: "9_today", employee_name: "Chris Lee", employee_id: "EMP009", department: "IT", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "9_yesterday", employee_name: "Chris Lee", employee_id: "EMP009", department: "IT", date: yesterday, status: "Present", time_in: "08:45", time_out: "17:15", working_hours: 8.25, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "9_twoDaysAgo", employee_name: "Chris Lee", employee_id: "EMP009", department: "IT", date: twoDaysAgo, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" },
-      
-      // Maria Rodriguez
-      { id: "10_today", employee_name: "Maria Rodriguez", employee_id: "EMP010", department: "Finance", date: today, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: today + "T10:00:00Z", notes: "" },
-      { id: "10_yesterday", employee_name: "Maria Rodriguez", employee_id: "EMP010", department: "Finance", date: yesterday, status: "Present", time_in: "08:30", time_out: "17:30", working_hours: 9, punctuality_status: "On Time", marked_by: "HR", marked_at: yesterday + "T10:00:00Z", notes: "" },
-      { id: "10_twoDaysAgo", employee_name: "Maria Rodriguez", employee_id: "EMP010", department: "Finance", date: twoDaysAgo, status: "Present", time_in: "09:00", time_out: "17:00", working_hours: 8, punctuality_status: "On Time", marked_by: "HR", marked_at: twoDaysAgo + "T10:00:00Z", notes: "" }
-    ];
-
-    return attendanceData;
-  };
 
   const processAttendanceData = (attendance: any[], employees: any[]) => {
     console.log("Processing attendance data:", attendance);
@@ -451,7 +454,7 @@ export default function AdminAttendancePage() {
       id: record.whalesync_postgres_id || record.id,
       employee_name: record.employee_name || record.name || "Unknown",
       employee_id: record.employee_id || "N/A",
-      department: record.department || "Unknown",
+      job_title: record.job_title || "No Job Title",
       date: record.date,
       status: record.status,
       time_in: record.time_in || "N/A",
@@ -466,31 +469,9 @@ export default function AdminAttendancePage() {
     console.log("Processed attendance:", processedAttendance);
     console.log("Processed attendance length:", processedAttendance.length);
     
-    // Force set some test data if processedAttendance is empty
-    if (processedAttendance.length === 0) {
-      console.log("No processed attendance, setting test data");
-      const testData = [{
-        id: "test_1",
-        employee_name: "Test Employee",
-        employee_id: "TEST001",
-        department: "Test",
-        date: new Date().toISOString().split('T')[0],
-        status: "Present",
-        time_in: "09:00",
-        time_out: "17:00",
-        working_hours: 8,
-        punctuality_status: "On Time",
-        marked_by: "HR",
-        marked_at: new Date().toISOString(),
-        notes: ""
-      }];
-      setAttendanceData(testData);
-      setFilteredData(testData);
-    } else {
-      console.log("Setting attendance data to state:", processedAttendance.length, "records");
-      setAttendanceData(processedAttendance);
-      setFilteredData(processedAttendance);
-    }
+    console.log("Setting attendance data to state:", processedAttendance.length, "records");
+    setAttendanceData(processedAttendance);
+    setFilteredData(processedAttendance);
 
     // Calculate department stats
     const deptStats = calculateDepartmentStats(processedAttendance, employees);
@@ -519,25 +500,54 @@ export default function AdminAttendancePage() {
   };
 
   const calculateDepartmentStats = (attendance: AttendanceRecord[], employees: any[]) => {
-    const departments = [...new Set(employees.map(emp => emp.department))];
+    const jobTitles = [...new Set(employees.map(emp => emp.job_title))];
     
-    return departments.map(dept => {
-      const deptEmployees = employees.filter(emp => emp.department === dept);
+    return jobTitles.map(jobTitle => {
+      const jobEmployees = employees.filter(emp => emp.job_title === jobTitle);
       const today = new Date().toISOString().split('T')[0];
-      const todayAttendance = attendance.filter(r => r.department === dept && r.date === today);
+      const todayAttendance = attendance.filter(r => r.job_title === jobTitle && r.date === today);
       const presentToday = todayAttendance.filter(r => r.status === 'Present').length;
-      const attendanceRate = deptEmployees.length > 0 ? (presentToday / deptEmployees.length) * 100 : 0;
+      const attendanceRate = jobEmployees.length > 0 ? (presentToday / jobEmployees.length) * 100 : 0;
       const avgHours = todayAttendance.length > 0 ? 
         todayAttendance.reduce((sum, r) => sum + r.working_hours, 0) / todayAttendance.length : 0;
 
       return {
-        department: dept,
-        total_employees: deptEmployees.length,
+        department: jobTitle,
+        total_employees: jobEmployees.length,
         present_today: presentToday,
         attendance_rate: Math.round(attendanceRate),
         avg_working_hours: Math.round(avgHours * 10) / 10
       };
     });
+  };
+
+  const calculateMonthlyStats = (attendance: AttendanceRecord[], month: string, year: string) => {
+    const monthMap: { [key: string]: number } = {
+      'january': 0, 'february': 1, 'march': 2, 'april': 3, 'may': 4, 'june': 5,
+      'july': 6, 'august': 7, 'september': 8, 'october': 9, 'november': 10, 'december': 11
+    };
+    
+    const monthIndex = monthMap[month];
+    const yearNum = parseInt(year);
+    
+    // Filter attendance records for the selected month and year
+    const monthlyAttendance = attendance.filter(record => {
+      const recordDate = new Date(record.date);
+      return recordDate.getMonth() === monthIndex && recordDate.getFullYear() === yearNum;
+    });
+
+    const present = monthlyAttendance.filter(r => r.status === 'Present').length;
+    const absent = monthlyAttendance.filter(r => r.status === 'Absent').length;
+    const halfDay = monthlyAttendance.filter(r => r.status === 'Half Day').length;
+    const totalRecords = monthlyAttendance.length;
+    const attendanceRate = totalRecords > 0 ? Math.round((present / totalRecords) * 100) : 0;
+
+    return {
+      present,
+      absent,
+      halfDay,
+      attendanceRate
+    };
   };
 
   const generateExceptionAlerts = (attendance: AttendanceRecord[]) => {
@@ -597,9 +607,9 @@ export default function AdminAttendancePage() {
       filtered = filtered.filter(record => statusFilter.includes(record.status));
     }
 
-    // Department filter
-    if (departmentFilter.length > 0) {
-      filtered = filtered.filter(record => departmentFilter.includes(record.department));
+    // Job Title filter
+    if (jobTitleFilter.length > 0) {
+      filtered = filtered.filter(record => jobTitleFilter.includes(record.job_title));
     }
 
     // Time filter (based on date)
@@ -645,12 +655,20 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     applyFilters();
-  }, [selectedDepartment, searchTerm, statusFilter, departmentFilter, timeFilter, sortField, sortDirection, attendanceData]);
+  }, [selectedDepartment, searchTerm, statusFilter, jobTitleFilter, timeFilter, sortField, sortDirection, attendanceData]);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, departmentFilter, timeFilter]);
+  }, [searchTerm, statusFilter, jobTitleFilter, timeFilter]);
+
+  // Calculate monthly stats when data or month/year selection changes
+  useEffect(() => {
+    if (attendanceData.length > 0) {
+      const stats = calculateMonthlyStats(attendanceData, selectedMonth, selectedYear);
+      setMonthlyStats(stats);
+    }
+  }, [attendanceData, selectedMonth, selectedYear]);
 
   const getStatusBadge = (status: string) => {
     const baseClasses = "px-2 py-1 rounded-full text-xs font-medium";
@@ -795,11 +813,11 @@ export default function AdminAttendancePage() {
 
   const handleExportData = () => {
     const csvContent = [
-      ['Employee Name', 'Employee ID', 'Department', 'Date', 'Status', 'Time In', 'Time Out', 'Working Hours', 'Marked By'],
+      ['Employee Name', 'Employee ID', 'Job Title', 'Date', 'Status', 'Time In', 'Time Out', 'Working Hours', 'Marked By'],
       ...filteredData.map(record => [
         record.employee_name,
         record.employee_id,
-        record.department,
+        record.job_title,
         record.date,
         record.status,
         record.time_in,
@@ -1053,7 +1071,6 @@ export default function AdminAttendancePage() {
         <div className="flex flex-col h-screen">
           <SiteHeader title="Attendance" />
           
-          
           <div className="flex-1 flex flex-col">
             <div className="p-1 space-y-1 flex-1 flex flex-col min-h-0">
               {/* KPI Cards */}
@@ -1173,36 +1190,36 @@ export default function AdminAttendancePage() {
                               </DropdownMenuContent>
                             </DropdownMenu>
 
-                            {/* Department Filter */}
+                            {/* Job Title Filter */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="outline" className="w-40 h-10 justify-between">
-                                  {departmentFilter.length === 0 ? "All Departments" : 
-                                   departmentFilter.length === 1 ? departmentFilter[0] : 
-                                   `${departmentFilter.length} Departments`}
+                                  {jobTitleFilter.length === 0 ? "All Job Titles" : 
+                                   jobTitleFilter.length === 1 ? jobTitleFilter[0] : 
+                                   `${jobTitleFilter.length} Job Titles`}
                                   <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start" className="w-56">
                                 <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                                  Select Department
+                                  Select Job Title
                                 </div>
                                 <div className="space-y-1">
-                                  {["Sales", "Marketing", "HR", "IT", "Finance"].map(dept => (
-                                    <div key={dept} className="flex items-center space-x-2 px-2 py-1.5">
+                                  {Array.from(new Set(attendanceData.map(record => record.job_title).filter(Boolean))).map(jobTitle => (
+                                    <div key={jobTitle} className="flex items-center space-x-2 px-2 py-1.5">
                                       <Checkbox
-                                        id={`dept-${dept}`}
-                                        checked={departmentFilter.includes(dept)}
+                                        id={`job-${jobTitle}`}
+                                        checked={jobTitleFilter.includes(jobTitle)}
                                         onCheckedChange={(checked) => {
                                           if (checked) {
-                                            setDepartmentFilter(prev => [...prev, dept]);
+                                            setJobTitleFilter(prev => [...prev, jobTitle]);
                                           } else {
-                                            setDepartmentFilter(prev => prev.filter(d => d !== dept));
+                                            setJobTitleFilter(prev => prev.filter(j => j !== jobTitle));
                                           }
                                         }}
                                       />
-                                      <Label htmlFor={`dept-${dept}`} className="text-sm cursor-pointer">
-                                        {dept}
+                                      <Label htmlFor={`job-${jobTitle}`} className="text-sm cursor-pointer">
+                                        {jobTitle}
                                       </Label>
                                     </div>
                                   ))}
@@ -1305,13 +1322,13 @@ export default function AdminAttendancePage() {
                                   </div>
                                   <div className="flex items-center space-x-2 px-2 py-1.5">
                                     <Checkbox
-                                      id="dropdown-department"
-                                      checked={visibleColumns.department}
+                                      id="dropdown-job_title"
+                                      checked={visibleColumns.job_title}
                                       onCheckedChange={(checked) => 
-                                        setVisibleColumns(prev => ({ ...prev, department: !!checked }))
+                                        setVisibleColumns(prev => ({ ...prev, job_title: !!checked }))
                                       }
                                     />
-                                    <Label htmlFor="dropdown-department" className="text-sm cursor-pointer">Department</Label>
+                                    <Label htmlFor="dropdown-job_title" className="text-sm cursor-pointer">Job Title</Label>
                                   </div>
                                   <div className="flex items-center space-x-2 px-2 py-1.5">
                                     <Checkbox
@@ -1410,15 +1427,15 @@ export default function AdminAttendancePage() {
                       </Button>
                     </TableHead>
                   )}
-                  {visibleColumns.department && (
+                  {visibleColumns.job_title && (
                     <TableHead className="py-0 px-2">
                       <Button
                         variant="ghost"
-                        onClick={() => handleSort("department")}
+                        onClick={() => handleSort("job_title")}
                         className="h-auto p-0 font-semibold hover:bg-transparent"
                       >
-                        Department
-                        {getSortIcon("department")}
+                        Job Title
+                        {getSortIcon("job_title")}
                       </Button>
                     </TableHead>
                   )}
@@ -1520,7 +1537,7 @@ export default function AdminAttendancePage() {
               </div>
                         </TableCell>
                       )}
-                      {visibleColumns.department && <TableCell className="text-base">{record.department}</TableCell>}
+                      {visibleColumns.job_title && <TableCell className="text-base">{record.job_title}</TableCell>}
                       {visibleColumns.date && <TableCell className="text-base">{record.date}</TableCell>}
                       {visibleColumns.status && <TableCell>{getStatusBadge(record.status)}</TableCell>}
                       {visibleColumns.timeIn && <TableCell className="text-base">{record.time_in}</TableCell>}
@@ -1672,7 +1689,7 @@ export default function AdminAttendancePage() {
                                                         {getStatusBadge(record.status)}
             </div>
                                                       <div className="text-xs text-muted-foreground">
-                                                        <p>Department: {record.department}</p>
+                                                        <p>Job Title: {record.job_title}</p>
                                                         <p>Date: {record.date}</p>
                                                         {record.time_in && <p>Time In: {record.time_in}</p>}
                                                         {record.time_out && <p>Time Out: {record.time_out}</p>}
@@ -1790,133 +1807,274 @@ export default function AdminAttendancePage() {
 
                         {/* Rankings View */}
                         {viewType === "rankings" && (
-                          <div className="flex flex-col h-[60vh]">
-                            <div className="flex-1 overflow-y-auto border rounded-md">
-                              <div className="p-4">
-                                <div className="space-y-4">
-                                  <div className="text-center mb-6">
-                                    <h3 className="text-lg font-semibold mb-2">Top Attendance Rankings</h3>
-                                    <p className="text-sm text-muted-foreground">Best performers this month</p>
-                                  </div>
-                                  
-                                  {(() => {
-                                    // Calculate top performers based on attendance rate
-                                    const employeeStats = attendanceData.reduce((acc, record) => {
-                                      if (!acc[record.employee_name]) {
-                                        acc[record.employee_name] = {
-                                          name: record.employee_name,
-                                          department: record.department,
-                                          totalDays: 0,
-                                          presentDays: 0,
-                                          totalHours: 0
-                                        };
-                                      }
-                                      acc[record.employee_name].totalDays++;
-                                      if (record.status === 'Present') {
-                                        acc[record.employee_name].presentDays++;
-                                        acc[record.employee_name].totalHours += record.working_hours || 0;
-                                      }
-                                      return acc;
-                                    }, {} as Record<string, any>);
-
-                                    const topPerformers = Object.values(employeeStats)
-                                      .map((emp: any) => ({
-                                        ...emp,
-                                        attendanceRate: Math.round((emp.presentDays / emp.totalDays) * 100),
-                                        avgHours: emp.presentDays > 0 ? Math.round((emp.totalHours / emp.presentDays) * 10) / 10 : 0
-                                      }))
-                                      .sort((a, b) => b.attendanceRate - a.attendanceRate)
-                                      .slice(0, 3);
-
-                                    return topPerformers.map((performer, index) => {
-                                      const getRankIcon = (rank: number) => {
-                                        switch (rank) {
-                                          case 0: return <div className="w-8 h-8 bg-yellow-100 text-yellow-800 rounded-full flex items-center justify-center font-bold text-sm">🥇</div>;
-                                          case 1: return <div className="w-8 h-8 bg-gray-100 text-gray-800 rounded-full flex items-center justify-center font-bold text-sm">🥈</div>;
-                                          case 2: return <div className="w-8 h-8 bg-orange-100 text-orange-800 rounded-full flex items-center justify-center font-bold text-sm">🥉</div>;
-                                          default: return <div className="w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center font-bold text-sm">{rank + 1}</div>;
-                                        }
-                                      };
-
-                                      const getRankColor = (rank: number) => {
-                                        switch (rank) {
-                                          case 0: return 'border-yellow-200 bg-yellow-50';
-                                          case 1: return 'border-gray-200 bg-gray-50';
-                                          case 2: return 'border-orange-200 bg-orange-50';
-                                          default: return 'border-blue-200 bg-blue-50';
-                                        }
-                                      };
-
-                                      return (
-                                        <Card key={performer.name} className={`border-l-4 border-l-primary/30 ${getRankColor(index)}`}>
-                                          <CardContent className="p-4">
-                                            <div className="flex items-center justify-between">
-                                              <div className="flex items-center gap-4">
-                                                {getRankIcon(index)}
-                                                <div>
-                                                  <h4 className="font-semibold text-lg">{performer.name}</h4>
-                                                  <p className="text-sm text-muted-foreground">{performer.department}</p>
-                                                </div>
-                                              </div>
-                                              <div className="text-right">
-                                                <div className="text-2xl font-bold text-primary">
-                                                  {performer.attendanceRate}%
-                                                </div>
-                                                <div className="text-sm text-muted-foreground">
-                                                  {performer.avgHours}h avg
-                                                </div>
-                                              </div>
-                                            </div>
-                                            <div className="mt-3">
-                                              <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                                <span>Attendance Rate</span>
-                                                <span>{performer.attendanceRate}%</span>
-                                              </div>
-                                              <div className="w-full bg-muted rounded-full h-2">
-                                                <div 
-                                                  className="bg-gradient-to-r from-primary to-primary/80 h-2 rounded-full transition-all duration-500"
-                                                  style={{ width: `${performer.attendanceRate}%` }}
-                                                ></div>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center justify-between mt-3 pt-3 border-t">
-                                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                                <div className="flex items-center gap-1">
-                                                  <CheckCircle className="h-3 w-3 text-green-600" />
-                                                  <span>{performer.presentDays} days present</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                  <Clock className="h-3 w-3 text-blue-600" />
-                                                  <span>{performer.avgHours}h average</span>
-                                                </div>
-                                              </div>
-                                              <Badge className="bg-primary/10 text-primary">
-                                                Rank #{index + 1}
-                                              </Badge>
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                      );
-                                    });
-                                  })()}
-                                </div>
+                          <div className="space-y-6">
+                            {/* Header with Job Title Filter */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="text-2xl font-bold text-foreground mb-2">Attendance Rankings</h3>
+                                <p className="text-muted-foreground">All employees ranked by attendance performance</p>
                               </div>
+                              
+                              {/* Job Title Filter */}
+                              <div className="flex items-center gap-4">
+                                <Label htmlFor="rankings-job-filter" className="text-sm font-medium">Filter by Job Title:</Label>
+                                <Select value={jobTitleFilter.length > 0 ? jobTitleFilter[0] : "all"} onValueChange={(value) => {
+                                  if (value === "all") {
+                                    setJobTitleFilter([]);
+                                  } else {
+                                    setJobTitleFilter([value]);
+                                  }
+                                }}>
+                                  <SelectTrigger id="rankings-job-filter" className="w-48">
+                                    <SelectValue placeholder="All Job Titles" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">All Job Titles</SelectItem>
+                                    {Array.from(new Set(attendanceData.map(record => record.job_title).filter(Boolean))).map(jobTitle => (
+                                      <SelectItem key={jobTitle} value={jobTitle}>{jobTitle}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            
+                            {/* Rankings Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                              {(() => {
+                                // Start with ALL employees from Employee Directory
+                                const allEmployeesFromDB = employees.map(emp => ({
+                                  name: emp.full_name,
+                                  job_title: emp.job_title || 'No Job Title',
+                                  profile_photo: emp.profile_photo,
+                                  totalDays: 0,
+                                  presentDays: 0,
+                                  absentDays: 0,
+                                  halfDays: 0,
+                                  totalHours: 0
+                                }));
+
+                                console.log("All employees from DB:", allEmployeesFromDB.length);
+
+                                // Calculate attendance stats for employees who have attendance records
+                                const attendanceStats = attendanceData.reduce((acc, record) => {
+                                  if (!acc[record.employee_name]) {
+                                    acc[record.employee_name] = {
+                                      name: record.employee_name,
+                                      job_title: record.job_title,
+                                      profile_photo: record.profile_photo,
+                                      totalDays: 0,
+                                      presentDays: 0,
+                                      absentDays: 0,
+                                      halfDays: 0,
+                                      totalHours: 0
+                                    };
+                                    // Debug: Log profile photo info
+                                    console.log(`Employee: ${record.employee_name}, Profile Photo: ${record.profile_photo}, Type: ${typeof record.profile_photo}`);
+                                  }
+                                  acc[record.employee_name].totalDays++;
+                                  if (record.status === 'Present') {
+                                    acc[record.employee_name].presentDays++;
+                                    acc[record.employee_name].totalHours += record.working_hours || 0;
+                                  } else if (record.status === 'Absent') {
+                                    acc[record.employee_name].absentDays++;
+                                  } else if (record.status === 'Half Day') {
+                                    acc[record.employee_name].halfDays++;
+                                    acc[record.employee_name].totalHours += record.working_hours || 0;
+                                  }
+                                  return acc;
+                                }, {} as Record<string, any>);
+
+                                // Merge attendance stats with all employees
+                                let allEmployees = allEmployeesFromDB.map(emp => {
+                                  const attendanceData = attendanceStats[emp.name];
+                                  if (attendanceData) {
+                                    // Employee has attendance records
+                                    return {
+                                      ...emp,
+                                      ...attendanceData,
+                                      attendanceRate: Math.round((attendanceData.presentDays / attendanceData.totalDays) * 100),
+                                      avgHours: (attendanceData.presentDays + attendanceData.halfDays) > 0 ? Math.round((attendanceData.totalHours / (attendanceData.presentDays + attendanceData.halfDays)) * 10) / 10 : 0
+                                    };
+                                  } else {
+                                    // Employee has no attendance records
+                                    return {
+                                      ...emp,
+                                      attendanceRate: 0,
+                                      avgHours: 0
+                                    };
+                                  }
+                                }).sort((a, b) => b.attendanceRate - a.attendanceRate);
+
+                                console.log("Final all employees count:", allEmployees.length);
+
+                                // Filter by job title if selected
+                                if (jobTitleFilter.length > 0) {
+                                  allEmployees = allEmployees.filter(emp => jobTitleFilter.includes(emp.job_title));
+                                }
+
+                                return allEmployees.map((employee, index) => {
+                                  const getRankIcon = (rank: number) => {
+                                    if (rank < 3) {
+                                      const colors = [
+                                        'from-yellow-400 to-yellow-600',
+                                        'from-gray-400 to-gray-600', 
+                                        'from-orange-400 to-orange-600'
+                                      ];
+                                      return (
+                                        <div className={`w-8 h-8 bg-gradient-to-br ${colors[rank]} text-white rounded-full flex items-center justify-center font-bold text-sm shadow-lg`}>
+                                          {rank + 1}
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-lg">
+                                        {rank + 1}
+                                      </div>
+                                    );
+                                  };
+
+                                  const getProgressColor = (rate: number) => {
+                                    if (rate >= 95) return 'from-green-500 to-green-600';
+                                    if (rate >= 85) return 'from-yellow-500 to-yellow-600';
+                                    if (rate >= 70) return 'from-orange-500 to-orange-600';
+                                    return 'from-red-500 to-red-600';
+                                  };
+
+                                  return (
+                                    <Card key={employee.name} className="bg-card border-border shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+                                      <CardContent className="p-6">
+                                        {/* Header with Photo and Rank */}
+                                        <div className="flex items-center gap-4 mb-4">
+                                          <div className="relative">
+                                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-border shadow-lg overflow-hidden">
+                                              {employee.profile_photo ? (
+                                                <img 
+                                                  src={(() => {
+                                                    const photo = employee.profile_photo;
+                                                    console.log(`Processing photo for ${employee.name}:`, photo);
+                                                    
+                                                    if (photo.startsWith('http')) {
+                                                      return photo;
+                                                    } else if (photo.startsWith('data:')) {
+                                                      return photo;
+                                                    } else if (photo.startsWith('/')) {
+                                                      return `https://grjaqvdoxqendrzzgyjk.supabase.co${photo}`;
+                                                    } else {
+                                                      return `https://grjaqvdoxqendrzzgyjk.supabase.co/storage/v1/object/public/avatars/${photo}`;
+                                                    }
+                                                  })()} 
+                                                  alt={employee.name}
+                                                  className="w-full h-full object-cover"
+                                                  onLoad={() => console.log(`Image loaded successfully for ${employee.name}`)}
+                                                  onError={(e) => {
+                                                    console.log('Image failed to load for', employee.name, ':', employee.profile_photo);
+                                                    e.currentTarget.style.display = 'none';
+                                                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                                                  }}
+                                                />
+                                              ) : null}
+                                              <div 
+                                                className={`w-full h-full flex items-center justify-center text-white font-bold text-lg ${employee.profile_photo ? 'hidden' : 'flex'}`}
+                                                style={{ 
+                                                  backgroundColor: `hsl(${(employee.name.charCodeAt(0) * 137.5) % 360}, 70%, 50%)`,
+                                                  backgroundImage: `linear-gradient(135deg, hsl(${(employee.name.charCodeAt(0) * 137.5) % 360}, 70%, 50%), hsl(${((employee.name.charCodeAt(0) * 137.5) + 30) % 360}, 70%, 60%)`
+                                                }}
+                                              >
+                                                {employee.name.charAt(0).toUpperCase()}
+                                              </div>
+                                            </div>
+                                            <div className="absolute -top-1 -right-1">
+                                              {getRankIcon(index)}
+                                            </div>
+                                          </div>
+                                          
+                                          <div className="flex-1">
+                                            <h4 className="font-bold text-lg text-foreground mb-1">{employee.name}</h4>
+                                            <Badge className="bg-muted text-muted-foreground font-medium px-2 py-1 text-xs">
+                                              {employee.job_title}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Attendance Rate */}
+                                        <div className="text-center mb-4">
+                                          <div className="text-3xl font-bold text-foreground mb-1">{employee.attendanceRate}%</div>
+                                          <div className="text-sm text-muted-foreground">Attendance Rate</div>
+                                        </div>
+                                        
+                                        {/* Progress Bar */}
+                                        <div className="mb-4">
+                                          <div className="w-full bg-muted/50 rounded-full h-2">
+                                            <div 
+                                              className={`bg-gradient-to-r ${getProgressColor(employee.attendanceRate)} h-2 rounded-full transition-all duration-700`}
+                                              style={{ width: `${employee.attendanceRate}%` }}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Stats */}
+                                        <div className="space-y-2">
+                                          <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                            <div className="flex items-center gap-1">
+                                              <CheckCircle className="h-4 w-4 text-green-500" />
+                                              <span>{employee.presentDays} present</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              <Clock className="h-4 w-4 text-blue-500" />
+                                              <span>{employee.avgHours}h avg</span>
+                                            </div>
+                                          </div>
+                                          
+                                          {(employee.absentDays > 0 || employee.halfDays > 0) && (
+                                            <div className="flex items-center justify-between text-sm text-muted-foreground">
+                                              {employee.absentDays > 0 && (
+                                                <div className="flex items-center gap-1">
+                                                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                                                  <span>{employee.absentDays} absent</span>
+                                                </div>
+                                              )}
+                                              {employee.halfDays > 0 && (
+                                                <div className="flex items-center gap-1">
+                                                  <Clock className="h-4 w-4 text-orange-500" />
+                                                  <span>{employee.halfDays} half day</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  );
+                                });
+                              })()}
+                              
+                              {attendanceData.length === 0 && (
+                                <div className="col-span-full text-center py-12">
+                                  <div className="text-muted-foreground text-lg">No attendance data available</div>
+                                  <p className="text-sm text-muted-foreground mt-2">Attendance rankings will appear here once data is available</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
                 </TabsContent>
 
-                {/* Departments Tab */}
+                {/* Job Titles Tab */}
                 <TabsContent value="departments" className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {departmentStats.map((dept, index) => {
-                      const getDepartmentIcon = (deptName: string) => {
-                        switch (deptName.toLowerCase()) {
+                      const getJobTitleIcon = (jobTitle: string) => {
+                        if (!jobTitle) return <Building2 className="h-4 w-4 text-gray-600" />;
+                        switch (jobTitle.toLowerCase()) {
                           case 'sales': return <Target className="h-4 w-4 text-blue-600" />;
                           case 'marketing': return <TrendingUp className="h-4 w-4 text-purple-600" />;
                           case 'hr': return <Users className="h-4 w-4 text-green-600" />;
                           case 'it': return <Zap className="h-4 w-4 text-orange-600" />;
                           case 'finance': return <DollarSign className="h-4 w-4 text-emerald-600" />;
+                          case 'software engineer': return <Zap className="h-4 w-4 text-blue-600" />;
+                          case 'manager': return <Users className="h-4 w-4 text-purple-600" />;
+                          case 'developer': return <Zap className="h-4 w-4 text-green-600" />;
+                          case 'analyst': return <TrendingUp className="h-4 w-4 text-orange-600" />;
                           default: return <Building2 className="h-4 w-4 text-gray-600" />;
                         }
                       };
@@ -1939,7 +2097,7 @@ export default function AdminAttendancePage() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <div className="p-1.5 rounded-md bg-primary/10">
-                                  {getDepartmentIcon(dept.department)}
+                                  {getJobTitleIcon(dept.department)}
                                 </div>
                                 <div>
                                   <CardTitle className="text-base font-semibold">{dept.department}</CardTitle>
@@ -2208,7 +2366,7 @@ export default function AdminAttendancePage() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold">Monthly Statistics</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Select defaultValue="october">
+                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                         <SelectTrigger className="w-32 h-8">
                           <SelectValue />
                         </SelectTrigger>
@@ -2227,7 +2385,7 @@ export default function AdminAttendancePage() {
                           <SelectItem value="december">December</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Select defaultValue="2025">
+                      <Select value={selectedYear} onValueChange={setSelectedYear}>
                         <SelectTrigger className="w-20 h-8">
                           <SelectValue />
                         </SelectTrigger>
@@ -2241,51 +2399,51 @@ export default function AdminAttendancePage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="bg-gradient-to-t from-green-500/10 to-green-50 dark:from-green-500/10 dark:to-green-950 border-green-200 dark:border-green-800">
+                  <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-2 lg:grid-cols-4 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs">
+                    <Card className="@container/card">
                       <CardHeader className="pb-2">
                         <CardDescription className="flex items-center justify-between">
                           <span className="text-green-600 dark:text-green-400">Present</span>
                           <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                         </CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums text-green-700 dark:text-green-300">
-                          0
+                          {monthlyStats.present}
                         </CardTitle>
                       </CardHeader>
                     </Card>
                     
-                    <Card className="bg-gradient-to-t from-red-500/10 to-red-50 dark:from-red-500/10 dark:to-red-950 border-red-200 dark:border-red-800">
+                    <Card className="@container/card">
                       <CardHeader className="pb-2">
                         <CardDescription className="flex items-center justify-between">
                           <span className="text-red-600 dark:text-red-400">Absent</span>
                           <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300">
-                          0
+                          {monthlyStats.absent}
                         </CardTitle>
                       </CardHeader>
                     </Card>
                     
-                    <Card className="bg-gradient-to-t from-orange-500/10 to-orange-50 dark:from-orange-500/10 dark:to-orange-950 border-orange-200 dark:border-orange-800">
+                    <Card className="@container/card">
                       <CardHeader className="pb-2">
                         <CardDescription className="flex items-center justify-between">
                           <span className="text-orange-600 dark:text-orange-400">Half Day</span>
                           <Clock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                         </CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums text-orange-700 dark:text-orange-300">
-                          1
+                          {monthlyStats.halfDay}
                         </CardTitle>
                       </CardHeader>
                     </Card>
                     
-                    <Card className="bg-gradient-to-t from-blue-500/10 to-blue-50 dark:from-blue-500/10 dark:to-blue-950 border-blue-200 dark:border-blue-800">
+                    <Card className="@container/card">
                       <CardHeader className="pb-2">
                         <CardDescription className="flex items-center justify-between">
                           <span className="text-blue-600 dark:text-blue-400">Attendance Rate</span>
                           <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </CardDescription>
                         <CardTitle className="text-2xl font-semibold tabular-nums text-blue-700 dark:text-blue-300">
-                          2%
+                          {monthlyStats.attendanceRate}%
                         </CardTitle>
                       </CardHeader>
                     </Card>

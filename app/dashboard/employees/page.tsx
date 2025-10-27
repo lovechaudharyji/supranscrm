@@ -29,6 +29,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   Search, 
   Edit2, 
@@ -41,7 +43,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  GripVertical
+  GripVertical,
+  ChevronDown
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -77,6 +80,8 @@ type Employee = {
   leads?: any;
   linkedin_profile?: string;
   monthly_payroll?: any;
+  job_title?: string;
+  reporting_manager?: string;
   official_contact_number?: string;
   official_email: string;
   official_number?: string;
@@ -92,6 +97,12 @@ type Employee = {
   users?: any;
   Notes?: string;
   Announcement?: any;
+  department?: {
+    whalesync_postgres_id: string;
+    department_name: string;
+    display_name?: string;
+    headcount?: number;
+  } | null;
 };
 
 type Team = {
@@ -117,13 +128,31 @@ export default function EmployeesPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [view, setView] = useState<'list' | 'grid' | 'kanban'>('list');
-  const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [jobTypeFilter, setJobTypeFilter] = useState<string[]>([]);
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
   // Modify the type to allow more flexibility
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Form state for controlled components
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    jobTitle: '',
+    employmentType: 'Full-time',
+    workMode: 'Office',
+    status: 'Active',
+    dateOfJoining: '',
+    phone: '',
+    address: ''
+  });
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -304,30 +333,72 @@ export default function EmployeesPage() {
         
         console.log('Employee Directory connection successful, fetching full data...');
 
-        // Fetch departments and employees in parallel
-        const [
-          { data: departmentsData, error: departmentsError },
-          { data: employeesData, error: employeesError }
-        ] = await Promise.all([
-          supabase.from('Departments').select('*'),
-          supabase.from('Employee Directory').select(`
-            *,
-            department:department(*)
-          `)
-        ]);
+        // First, let's test basic queries without foreign key relationships
+        console.log('Testing basic queries...');
+        
+        // Test departments query
+        const { data: departmentsData, error: departmentsError } = await supabase
+          .from('Departments')
+          .select('*');
         
         if (departmentsError) {
           console.error('Departments fetch error:', departmentsError);
-          // Don't throw, just log and continue
+        } else {
+          console.log('Departments fetched successfully:', departmentsData?.length || 0, 'records');
         }
+        
+        // Fetch employees with reporting manager data
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('Employee Directory')
+          .select(`
+            *,
+            reporting_manager:reporting_manager(
+              whalesync_postgres_id,
+              full_name,
+              profile_photo,
+              job_title
+            )
+          `);
         
         if (employeesError) {
           console.error('Employee Directory fetch error:', employeesError);
-          throw new Error(`Failed to fetch employees: ${employeesError.message}`);
+          console.error('Error details:', employeesError);
+          console.error('Error message:', employeesError.message);
+          console.error('Error code:', employeesError.code);
+          console.error('Error hint:', employeesError.hint);
+          console.error('Error details:', employeesError.details);
+          
+          // Set empty data and continue
+          setEmployees([]);
+          setDepartments([]);
+          setFilteredEmployees([]);
+          setLoading(false);
+          return;
+        } else {
+          console.log('Employees fetched successfully:', employeesData?.length || 0, 'records');
+        }
+        
+        if (departmentsError) {
+          console.error('Departments fetch error:', departmentsError);
+          console.error('Department error details:', departmentsError);
         }
 
         console.log('Raw employees data received:', employeesData?.length || 0, 'records');
         console.log('Raw departments data received:', departmentsData?.length || 0, 'records');
+        
+        // Debug: Log first employee's data to understand the structure
+        if (employeesData && employeesData.length > 0) {
+          console.log('First employee full data:', employeesData[0]);
+          console.log('All employee fields:', Object.keys(employeesData[0]));
+          console.log('Employee department field value:', employeesData[0].department);
+          console.log('Employee department field type:', typeof employeesData[0].department);
+        }
+        
+        // Debug: Log departments data structure
+        if (departmentsData && departmentsData.length > 0) {
+          console.log('First department data:', departmentsData[0]);
+          console.log('All department fields:', Object.keys(departmentsData[0]));
+        }
 
         // Process departments data
         const safeDepartmentsData = (departmentsData || []).map((dept, index) => ({
@@ -339,22 +410,88 @@ export default function EmployeesPage() {
           headcount: dept.headcount || 0
         }));
 
-        // Process employee data
-        const safeEmployeesData = (employeesData || []).map((emp, index) => ({
-          ...emp,
-          whalesync_postgres_id: emp.whalesync_postgres_id || `emp_${index}`,
-          full_name: emp.full_name || `Unnamed Employee ${index}`,
-          official_email: emp.official_email || '',
-          employment_type: emp.employment_type || 'Full-time',
-          status: emp.status || 'Active',
-          profile_photo: emp.profile_photo || null,
-          date_of_joining: emp.date_of_joining || null,
-          work_mode: emp.work_mode || 'Office',
-          department: emp.department || null
-        }));
+        // Process employee data with manual department linking
+        const safeEmployeesData = (employeesData || []).map((emp, index) => {
+          // Try to find matching department manually
+          let matchedDepartment = null;
+          
+          if (departmentsData && departmentsData.length > 0) {
+            // Check if employee has a department field that matches department ID
+            if (emp.department) {
+              matchedDepartment = departmentsData.find(dept => 
+                dept.whalesync_postgres_id === emp.department
+              );
+            }
+            
+            // If no match found, try other potential field names
+            if (!matchedDepartment) {
+              // Check for department_name field in employee
+              if (emp.department_name) {
+                matchedDepartment = departmentsData.find(dept => 
+                  dept.department_name === emp.department_name
+                );
+              }
+            }
+            
+            // Check for department_id field in employee
+            if (!matchedDepartment && emp.department_id) {
+              matchedDepartment = departmentsData.find(dept => 
+                dept.whalesync_postgres_id === emp.department_id
+              );
+            }
+          }
+          
+          console.log(`Employee ${emp.full_name}:`, {
+            jobTitle: emp.job_title,
+            reportingManager: emp.reporting_manager,
+            reportingManagerName: emp.reporting_manager?.full_name,
+            reportingManagerPhoto: emp.reporting_manager?.profile_photo,
+            departmentField: emp.department,
+            departmentNameField: emp.department_name,
+            departmentIdField: emp.department_id,
+            matchedDepartment: matchedDepartment
+          });
+          
+          return {
+            ...emp,
+            whalesync_postgres_id: emp.whalesync_postgres_id || `emp_${index}`,
+            full_name: emp.full_name || `Unnamed Employee ${index}`,
+            official_email: emp.official_email || '',
+            employment_type: emp.employment_type || 'Full-time',
+            status: emp.status || 'Active',
+            profile_photo: emp.profile_photo || null,
+            date_of_joining: emp.date_of_joining || null,
+            work_mode: emp.work_mode || 'Office',
+            job_title: emp.job_title || null,
+            // Use the joined reporting manager data
+            reporting_manager: emp.reporting_manager || null,
+            // Use matched department or null
+            department: matchedDepartment || null
+          };
+        });
 
         console.log('Processed employees data:', safeEmployeesData.length, 'records');
         console.log('Sample employee:', safeEmployeesData[0]);
+        
+        // Debug: Show first few employees with their job and manager data
+        console.log('=== EMPLOYEE DEBUG INFO ===');
+        safeEmployeesData.slice(0, 3).forEach((emp, index) => {
+          console.log(`Employee ${index + 1}: ${emp.full_name}`);
+          console.log('  - Job Title:', emp.job_title);
+          console.log('  - Reporting Manager:', emp.reporting_manager);
+          console.log('  - Department object:', emp.department);
+          console.log('  - Department name:', emp.department?.department_name);
+          console.log('  - Display name:', emp.department?.display_name);
+          console.log('  - Raw employee data keys:', Object.keys(emp));
+        });
+        console.log('=== END DEBUG INFO ===');
+        
+        // Debug: Log department info without alert
+        console.log('=== DEPARTMENT SUMMARY ===');
+        safeEmployeesData.slice(0, 3).forEach((emp, index) => {
+          console.log(`${emp.full_name}: dept=${emp.department?.department_name || 'null'}, display=${emp.department?.display_name || 'null'}`);
+        });
+        console.log('=== END SUMMARY ===');
         
         // Debug: Check status values in the data
         const statusValues = safeEmployeesData.map(emp => emp.status).filter((status, index, self) => self.indexOf(status) === index);
@@ -379,22 +516,29 @@ export default function EmployeesPage() {
           message: error instanceof Error ? error.message : 'Unknown error',
           stack: error instanceof Error ? error.stack : undefined
         });
+        setError(error instanceof Error ? error : new Error('Unknown error'));
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
   }, []);
 
-  // Filter and sort employees based on search, team, department, and sorting
+  // Filter and sort employees based on search, job type, employment type, and status
   useEffect(() => {
     let result = employees;
     
-    if (teamFilter !== 'all') {
-      result = result.filter(emp => emp.teams?.id == Number(teamFilter));
+    if (jobTypeFilter.length > 0) {
+      result = result.filter(emp => emp.job_title && jobTypeFilter.includes(emp.job_title.trim()));
     }
     
-    if (departmentFilter !== 'all') {
-      result = result.filter(emp => emp.department?.whalesync_postgres_id === departmentFilter);
+    if (employmentTypeFilter.length > 0) {
+      result = result.filter(emp => emp.employment_type && employmentTypeFilter.includes(emp.employment_type.trim()));
+    }
+    
+    if (statusFilter.length > 0) {
+      result = result.filter(emp => emp.status && statusFilter.includes(emp.status.trim()));
     }
     
     if (searchTerm) {
@@ -404,7 +548,9 @@ export default function EmployeesPage() {
         (emp.official_email && emp.official_email.toLowerCase().includes(searchTermLower)) ||
         (emp.employment_type && emp.employment_type.toLowerCase().includes(searchTermLower)) ||
         (emp.employee_id && emp.employee_id.toLowerCase().includes(searchTermLower)) ||
-        (emp.department?.department_name && emp.department.department_name.toLowerCase().includes(searchTermLower))
+        (emp.department?.department_name && emp.department.department_name.toLowerCase().includes(searchTermLower)) ||
+        (emp.job_title && emp.job_title.toLowerCase().includes(searchTermLower)) ||
+        (emp.reporting_manager?.full_name && emp.reporting_manager.full_name.toLowerCase().includes(searchTermLower))
       );
     }
 
@@ -431,9 +577,13 @@ export default function EmployeesPage() {
             aValue = a.work_mode || '';
             bValue = b.work_mode || '';
             break;
-          case 'department':
-            aValue = a.department?.department_name || '';
-            bValue = b.department?.department_name || '';
+          case 'reporting_manager':
+            aValue = a.reporting_manager?.full_name || '';
+            bValue = b.reporting_manager?.full_name || '';
+            break;
+          case 'job_title':
+            aValue = a.job_title || '';
+            bValue = b.job_title || '';
             break;
           case 'date_of_joining':
             aValue = a.date_of_joining || '';
@@ -453,7 +603,24 @@ export default function EmployeesPage() {
     }
     
     setFilteredEmployees(result);
-  }, [employees, teamFilter, departmentFilter, searchTerm, sortColumn, sortDirection]);
+  }, [employees, jobTypeFilter, employmentTypeFilter, statusFilter, searchTerm, sortColumn, sortDirection]);
+
+  // Helper functions for multi-select filters
+  const toggleFilter = (filterArray: string[], setFilterArray: (value: string[]) => void, value: string) => {
+    if (filterArray.includes(value)) {
+      setFilterArray(filterArray.filter(item => item !== value));
+    } else {
+      setFilterArray([...filterArray, value]);
+    }
+  };
+
+  const toggleSelectAll = (filterArray: string[], setFilterArray: (value: string[]) => void, allOptions: string[]) => {
+    if (filterArray.length === allOptions.length) {
+      setFilterArray([]);
+    } else {
+      setFilterArray([...allOptions]);
+    }
+  };
 
   // Handle column sorting
   const handleSort = (column: string) => {
@@ -797,6 +964,139 @@ export default function EmployeesPage() {
     setDetailsModalOpen(true);
   };
 
+  // Update form data when employee is selected for editing
+  const handleEditEmployee = (employee: Employee) => {
+    console.log('Editing employee:', employee);
+    setSelectedEmployee(employee);
+    setIsEditing(true);
+    const newFormData = {
+      firstName: employee.full_name?.split(' ')[0] || '',
+      lastName: employee.full_name?.split(' ').slice(1).join(' ') || '',
+      email: employee.official_email || '',
+      jobTitle: employee.job_title || '',
+      employmentType: employee.employment_type || 'Full-time',
+      workMode: employee.work_mode || 'Office',
+      status: employee.status || 'Active',
+      dateOfJoining: employee.date_of_joining ? new Date(employee.date_of_joining).toISOString().split('T')[0] : '',
+      phone: employee.personal_contact_number || '',
+      address: employee.current_address || ''
+    };
+    console.log('Setting form data:', newFormData);
+    setFormData(newFormData);
+  };
+
+  // Handle form field changes
+  const handleFormChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Debug isEditing state changes
+  useEffect(() => {
+    console.log('isEditing state changed to:', isEditing);
+  }, [isEditing]);
+
+  // Update form data when selectedEmployee changes
+  useEffect(() => {
+    if (selectedEmployee && isEditing) {
+      console.log('useEffect: Updating form data for selected employee:', selectedEmployee);
+      const newFormData = {
+        firstName: selectedEmployee.full_name?.split(' ')[0] || '',
+        lastName: selectedEmployee.full_name?.split(' ').slice(1).join(' ') || '',
+        email: selectedEmployee.official_email || '',
+        jobTitle: selectedEmployee.job_title || '',
+        employmentType: selectedEmployee.employment_type || 'Full-time',
+        workMode: selectedEmployee.work_mode || 'Office',
+        status: selectedEmployee.status || 'Active',
+        dateOfJoining: selectedEmployee.date_of_joining ? new Date(selectedEmployee.date_of_joining).toISOString().split('T')[0] : '',
+        phone: selectedEmployee.personal_contact_number || '',
+        address: selectedEmployee.current_address || ''
+      };
+      console.log('useEffect: Setting form data:', newFormData);
+      setFormData(newFormData);
+    }
+  }, [selectedEmployee, isEditing]);
+
+  // Handle form submission for edit/add employee
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    try {
+      console.log('Form submission started');
+      console.log('Form data:', formData);
+      const employeeData = {
+        full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+        official_email: formData.email,
+        employment_type: formData.employmentType,
+        job_title: formData.jobTitle,
+        work_mode: formData.workMode,
+        status: formData.status,
+        date_of_joining: formData.dateOfJoining || null,
+        personal_contact_number: formData.phone || null,
+        current_address: formData.address || null,
+      };
+
+      // Remove empty strings and convert to null for database
+      Object.keys(employeeData).forEach(key => {
+        if (employeeData[key as keyof typeof employeeData] === '') {
+          employeeData[key as keyof typeof employeeData] = null as any;
+        }
+      });
+
+      if (selectedEmployee) {
+        // Update existing employee
+        console.log('Updating employee with data:', employeeData);
+        console.log('Employee ID:', selectedEmployee.whalesync_postgres_id);
+        
+        const { error } = await supabase
+          .from('Employee Directory')
+          .update(employeeData)
+          .eq('whalesync_postgres_id', selectedEmployee.whalesync_postgres_id);
+
+        if (error) {
+          console.error('Error updating employee:', error);
+          console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            hint: error.hint,
+            details: error.details
+          });
+          alert(`Failed to update employee: ${error.message || 'Unknown error'}`);
+          return;
+        }
+
+        alert('Employee updated successfully!');
+      } else {
+        // Add new employee
+        const { error } = await supabase
+          .from('Employee Directory')
+          .insert([employeeData]);
+
+        if (error) {
+          console.error('Error adding employee:', error);
+          alert('Failed to add employee. Please try again.');
+          return;
+        }
+
+        alert('Employee added successfully!');
+      }
+
+      // Refresh the data
+      window.location.reload();
+      setSelectedEmployee(null);
+    } catch (error) {
+      console.error('Error saving employee:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
+      alert(`An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Render employee list view (without pagination)
   const renderEmployeeList = () => (
     <Table>
@@ -835,11 +1135,21 @@ export default function EmployeesPage() {
             <TableHead>
               <Button
                 variant="ghost"
-                onClick={() => handleSort('department')}
+                onClick={() => handleSort('reporting_manager')}
                 className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
               >
-                Department
-                {renderSortIcon('department')}
+                Reporting Manager
+                {renderSortIcon('reporting_manager')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('job_title')}
+                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+              >
+                Job Type
+                {renderSortIcon('job_title')}
               </Button>
             </TableHead>
             <TableHead>
@@ -915,9 +1225,30 @@ export default function EmployeesPage() {
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">
-                  {emp.department?.department_name || 'No Department'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {emp.reporting_manager?.profile_photo ? (
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={emp.reporting_manager.profile_photo} alt={emp.reporting_manager.full_name || 'Manager'} />
+                      <AvatarFallback className="text-xs">
+                        {emp.reporting_manager.full_name?.charAt(0) || 'M'}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center">
+                      <span className="text-xs text-gray-600">
+                        {emp.reporting_manager?.full_name?.charAt(0) || 'M'}
+                      </span>
+                    </div>
+                  )}
+                  <span className="text-sm">
+                    {emp.reporting_manager?.full_name || 'Not Assigned'}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm">
+                  {emp.job_title || 'Not Specified'}
+                </span>
               </TableCell>
               <TableCell>
                 <span className="text-xs">{emp.date_of_joining ? new Date(emp.date_of_joining).toLocaleDateString() : 'Not specified'}</span>
@@ -934,10 +1265,11 @@ export default function EmployeesPage() {
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedEmployee(emp);
+                      handleEditEmployee(emp);
                     }}
                     data-action="edit"
                     className="h-7 w-7 hover:bg-muted"
+                    title="Edit Employee"
                   >
                     <Edit2 className="h-3.5 w-3.5" />
                   </Button>
@@ -950,6 +1282,7 @@ export default function EmployeesPage() {
                     }}
                     data-action="delete"
                     className="h-7 w-7 hover:bg-muted hover:text-destructive"
+                    title="Delete Employee"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -1018,14 +1351,41 @@ export default function EmployeesPage() {
               </span>
             </div>
 
-            {/* Department */}
+            {/* Reporting Manager */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                <span className="text-xs text-muted-foreground">Department</span>
+                <span className="text-xs text-muted-foreground">Manager</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {emp.reporting_manager?.profile_photo ? (
+                  <Avatar className="h-4 w-4">
+                    <AvatarImage src={emp.reporting_manager.profile_photo} alt={emp.reporting_manager.full_name || 'Manager'} />
+                    <AvatarFallback className="text-xs">
+                      {emp.reporting_manager.full_name?.charAt(0) || 'M'}
+                    </AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <div className="h-4 w-4 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span className="text-xs text-gray-600">
+                      {emp.reporting_manager?.full_name?.charAt(0) || 'M'}
+                    </span>
+                  </div>
+                )}
+                <span className="text-xs text-foreground">
+                  {emp.reporting_manager?.full_name || 'Not Assigned'}
+                </span>
+              </div>
+            </div>
+
+            {/* Job Type */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">Job Type</span>
               </div>
               <span className="text-xs text-foreground">
-                {emp.department?.department_name || 'No Department'}
+                {emp.job_title || 'Not Specified'}
               </span>
             </div>
 
@@ -1071,8 +1431,9 @@ export default function EmployeesPage() {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => setSelectedEmployee(emp)}
+                onClick={() => handleEditEmployee(emp)}
                 className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                title="Edit Employee"
               >
                 <Edit2 className="h-3 w-3" />
               </Button>
@@ -1081,6 +1442,7 @@ export default function EmployeesPage() {
                 size="icon"
                 onClick={() => handleDelete(emp.whalesync_postgres_id)}
                 className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                title="Delete Employee"
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -1182,113 +1544,205 @@ export default function EmployeesPage() {
 
   // Modify the form rendering to use type guard
   const renderEmployeeForm = () => {
-    // Determine if we're editing or adding
-    const isEditing = selectedEmployee !== null;
 
     return (
       <Dialog 
         open={!!selectedEmployee} 
-        onOpenChange={() => setSelectedEmployee(null)}
+        onOpenChange={() => {
+          setSelectedEmployee(null);
+          setIsEditing(false);
+        }}
       >
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[700px]">
+          <DialogHeader className="pb-4">
             <DialogTitle>
               {isEditing ? 'Edit Employee' : 'Add New Employee'}
             </DialogTitle>
           </DialogHeader>
-          <form className="space-y-6">
+          {console.log('Rendering modal with form data:', formData, 'Selected employee:', selectedEmployee, 'isEditing:', isEditing)}
+          <form 
+            key={selectedEmployee?.whalesync_postgres_id || 'new'} 
+            className="space-y-3" 
+            onSubmit={handleFormSubmit}
+          >
             {/* Basic Details Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Basic Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold border-b pb-1">Basic Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
                     First Name
                   </label>
                   <Input 
+                    name="firstName"
                     placeholder="First Name" 
-                    defaultValue={
-                      selectedEmployee?.full_name?.split(' ')[0] || ''
-                    } 
+                    value={formData.firstName}
+                    onChange={(e) => handleFormChange('firstName', e.target.value)}
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
                     Last Name
                   </label>
                   <Input 
+                    name="lastName"
                     placeholder="Last Name" 
-                    defaultValue={
-                      selectedEmployee?.full_name?.split(' ').slice(1).join(' ') || ''
-                    } 
+                    value={formData.lastName}
+                    onChange={(e) => handleFormChange('lastName', e.target.value)}
+                    required
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Official Email
                 </label>
                 <Input 
+                  name="email"
                   type="email" 
                   placeholder="Email" 
-                  defaultValue={selectedEmployee?.official_email || ''} 
+                  value={formData.email}
+                  onChange={(e) => handleFormChange('email', e.target.value)}
+                  required
                 />
               </div>
             </div>
 
             {/* Employment Details Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold border-b pb-2">Employment Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold border-b pb-1">Employment Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
                     Job Title
                   </label>
                   <Input 
+                    name="jobTitle"
                     placeholder="Job Title" 
-                    defaultValue={selectedEmployee?.job_title || ''} 
+                    value={formData.jobTitle}
+                    onChange={(e) => handleFormChange('jobTitle', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-2">
-                    Team
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
+                    Employment Type
                   </label>
                   <Select 
-                    defaultValue={
-                      selectedEmployee?.teams?.id 
-                        ? selectedEmployee.teams.id.toString() 
-                        : 'all'
-                    }
+                    name="employmentType"
+                    value={formData.employmentType}
+                    onValueChange={(value) => handleFormChange('employmentType', value)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select Team" />
+                      <SelectValue placeholder="Select Employment Type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Teams</SelectItem>
-                      {teams.filter(team => team && team.id && team.team_name).map(team => (
-                        <SelectItem 
-                          key={team.id} 
-                          value={team.id.toString()}
-                        >
-                          {team.team_name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Full-time">Full-time</SelectItem>
+                      <SelectItem value="Part-time">Part-time</SelectItem>
+                      <SelectItem value="Contract">Contract</SelectItem>
+                      <SelectItem value="Intern">Intern</SelectItem>
+                      <SelectItem value="Director">Director</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
+                    Work Mode
+                  </label>
+                  <Select 
+                    name="workMode"
+                    value={formData.workMode}
+                    onValueChange={(value) => handleFormChange('workMode', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Work Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Office">Office</SelectItem>
+                      <SelectItem value="Remote">Remote</SelectItem>
+                      <SelectItem value="Hybrid">Hybrid</SelectItem>
+                      <SelectItem value="On-Site">On-Site</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">
+                    Date of Joining
+                  </label>
+                  <Input 
+                    name="dateOfJoining"
+                    type="date" 
+                    value={formData.dateOfJoining}
+                    onChange={(e) => handleFormChange('dateOfJoining', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
+                  Phone Number
+                </label>
+                <Input 
+                  name="phone"
+                  type="tel" 
+                  placeholder="Phone Number" 
+                  value={formData.phone}
+                  onChange={(e) => handleFormChange('phone', e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
+                  Address
+                </label>
+                <Input 
+                  name="address"
+                  placeholder="Current Address" 
+                  value={formData.address}
+                  onChange={(e) => handleFormChange('address', e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Status Section */}
+            <div className="space-y-3">
+              <h3 className="text-base font-semibold border-b pb-1">Status</h3>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  Employee Status
+                </label>
+                <Select 
+                  name="status"
+                  value={formData.status}
+                  onValueChange={(value) => handleFormChange('status', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Onboarding">Onboarding</SelectItem>
+                    <SelectItem value="Terminated">Terminated</SelectItem>
+                    <SelectItem value="Resigned">Resigned</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Form Actions */}
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-end space-x-2 pt-2 border-t">
               <Button 
                 type="button" 
                 variant="outline" 
-                onClick={() => setSelectedEmployee(null)}
+                size="sm"
+                onClick={() => {
+                  setSelectedEmployee(null);
+                  setIsEditing(false);
+                }}
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" size="sm">
                 {isEditing ? 'Update' : 'Add'}
               </Button>
             </div>
@@ -1331,6 +1785,77 @@ export default function EmployeesPage() {
     </div>
   );
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-background dark:bg-background overflow-hidden">
+        <SidebarProvider>
+          <AppSidebar />
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-shrink-0">
+              <SiteHeader title="Employees" />
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="h-8 w-8 mx-auto animate-spin border-2 border-muted border-t-primary rounded-full"></div>
+                <p className="mt-4 text-muted-foreground">Loading employees...</p>
+              </div>
+            </div>
+          </div>
+        </SidebarProvider>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex h-screen bg-background dark:bg-background overflow-hidden">
+        <SidebarProvider>
+          <AppSidebar />
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-shrink-0">
+              <SiteHeader title="Employees" />
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center max-w-2xl mx-auto p-6">
+                <div className="h-12 w-12 mx-auto text-red-500 mb-4">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Database Connection Error</h3>
+                <p className="text-muted-foreground mb-4">{error.message}</p>
+                
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
+                  <h4 className="font-semibold text-yellow-800 mb-2">Possible Solutions:</h4>
+                  <ul className="text-sm text-yellow-700 space-y-1">
+                    <li>• Check Supabase table permissions and RLS policies</li>
+                    <li>• Verify table names exist: "Employee Directory" and "Departments"</li>
+                    <li>• Ensure API keys are correct in environment variables</li>
+                    <li>• Check if tables have data</li>
+                  </ul>
+                </div>
+                
+                <div className="flex gap-2 justify-center">
+                  <Button onClick={() => window.location.reload()}>
+                    Try Again
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => window.open('/test-supabase-connection', '_blank')}
+                  >
+                    Run Diagnostics
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SidebarProvider>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background dark:bg-background overflow-hidden">
         <SidebarProvider>
@@ -1357,37 +1882,203 @@ export default function EmployeesPage() {
                     />
                   </div>
                   
-                  <Select value={teamFilter} onValueChange={setTeamFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="All Teams" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Teams</SelectItem>
-                      {teams.filter(team => team && team.id && team.team_name).map(team => (
-                        <SelectItem key={team.id} value={team.id.toString()}>
-                          {team.team_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[180px] justify-between">
+                        {jobTypeFilter.length === 0 ? "All Job Types" : `${jobTypeFilter.length} selected`}
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0 bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+                      <div className="max-h-60 overflow-auto">
+                        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="select-all-job-types"
+                              checked={jobTypeFilter.length === Array.from(new Set(employees
+                                .map(emp => emp.job_title)
+                                .filter(title => title && title.trim() !== '')
+                                .map(title => title!.trim())
+                              )).length}
+                              onCheckedChange={() => toggleSelectAll(
+                                jobTypeFilter, 
+                                setJobTypeFilter, 
+                                Array.from(new Set(employees
+                                  .map(emp => emp.job_title)
+                                  .filter(title => title && title.trim() !== '')
+                                  .map(title => title!.trim())
+                                ))
+                              )}
+                            />
+                            <label htmlFor="select-all-job-types" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Select All
+                            </label>
+                          </div>
+                        </div>
+                        <div className="p-1">
+                          {Array.from(new Set(employees
+                            .map(emp => emp.job_title)
+                            .filter(title => title && title.trim() !== '')
+                            .map(title => title!.trim())
+                          )).map(jobType => (
+                            <div key={jobType} className="flex items-center space-x-2 p-2 hover:bg-black dark:hover:bg-black rounded transition-colors">
+                              <Checkbox
+                                id={`job-type-${jobType}`}
+                                checked={jobTypeFilter.includes(jobType)}
+                                onCheckedChange={() => toggleFilter(jobTypeFilter, setJobTypeFilter, jobType)}
+                              />
+                              <label htmlFor={`job-type-${jobType}`} className="text-sm text-gray-900 dark:text-gray-100">
+                                {jobType}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   
-                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="All Departments" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {departments.filter(dept => dept && dept.whalesync_postgres_id && dept.department_name).map(dept => (
-                        <SelectItem key={dept.whalesync_postgres_id} value={dept.whalesync_postgres_id}>
-                          {dept.department_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[180px] justify-between">
+                        {employmentTypeFilter.length === 0 ? "All Employment Types" : `${employmentTypeFilter.length} selected`}
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0 bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+                      <div className="max-h-60 overflow-auto">
+                        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="select-all-employment-types"
+                              checked={employmentTypeFilter.length === Array.from(new Set(employees
+                                .map(emp => emp.employment_type)
+                                .filter(type => type && type.trim() !== '')
+                                .map(type => type!.trim())
+                              )).length}
+                              onCheckedChange={() => toggleSelectAll(
+                                employmentTypeFilter, 
+                                setEmploymentTypeFilter, 
+                                Array.from(new Set(employees
+                                  .map(emp => emp.employment_type)
+                                  .filter(type => type && type.trim() !== '')
+                                  .map(type => type!.trim())
+                                ))
+                              )}
+                            />
+                            <label htmlFor="select-all-employment-types" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Select All
+                            </label>
+                          </div>
+                        </div>
+                        <div className="p-1">
+                          {Array.from(new Set(employees
+                            .map(emp => emp.employment_type)
+                            .filter(type => type && type.trim() !== '')
+                            .map(type => type!.trim())
+                          )).map(empType => (
+                            <div key={empType} className="flex items-center space-x-2 p-2 hover:bg-black dark:hover:bg-black rounded transition-colors">
+                              <Checkbox
+                                id={`employment-type-${empType}`}
+                                checked={employmentTypeFilter.includes(empType)}
+                                onCheckedChange={() => toggleFilter(employmentTypeFilter, setEmploymentTypeFilter, empType)}
+                              />
+                              <label htmlFor={`employment-type-${empType}`} className="text-sm text-gray-900 dark:text-gray-100">
+                                {empType}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-[180px] justify-between">
+                        {statusFilter.length === 0 ? "All Status" : `${statusFilter.length} selected`}
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0 bg-white dark:bg-black border border-gray-200 dark:border-gray-800">
+                      <div className="max-h-60 overflow-auto">
+                        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="select-all-status"
+                              checked={statusFilter.length === Array.from(new Set(employees
+                                .map(emp => emp.status)
+                                .filter(status => status && status.trim() !== '')
+                                .map(status => status!.trim())
+                              )).length}
+                              onCheckedChange={() => toggleSelectAll(
+                                statusFilter, 
+                                setStatusFilter, 
+                                Array.from(new Set(employees
+                                  .map(emp => emp.status)
+                                  .filter(status => status && status.trim() !== '')
+                                  .map(status => status!.trim())
+                                ))
+                              )}
+                            />
+                            <label htmlFor="select-all-status" className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Select All
+                            </label>
+                          </div>
+                        </div>
+                        <div className="p-1">
+                          {Array.from(new Set(employees
+                            .map(emp => emp.status)
+                            .filter(status => status && status.trim() !== '')
+                            .map(status => status!.trim())
+                          )).map(status => (
+                            <div key={status} className="flex items-center space-x-2 p-2 hover:bg-black dark:hover:bg-black rounded transition-colors">
+                              <Checkbox
+                                id={`status-${status}`}
+                                checked={statusFilter.includes(status)}
+                                onCheckedChange={() => toggleFilter(statusFilter, setStatusFilter, status)}
+                              />
+                              <label htmlFor={`status-${status}`} className="text-sm text-gray-900 dark:text-gray-100">
+                                {status}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setJobTypeFilter([]);
+                      setEmploymentTypeFilter([]);
+                      setStatusFilter([]);
+                      setSearchTerm('');
+                    }}
+                    className="whitespace-nowrap"
+                  >
+                    Clear Filters
+                  </Button>
                   
                   {renderViewToggle()}
                   
-                  <Button onClick={() => setSelectedEmployee({} as Employee)}>
+                  <Button onClick={() => {
+                    setSelectedEmployee({} as Employee);
+                    setIsEditing(false);
+                    setFormData({
+                      firstName: '',
+                      lastName: '',
+                      email: '',
+                      jobTitle: '',
+                      employmentType: 'Full-time',
+                      workMode: 'Office',
+                      status: 'Active',
+                      dateOfJoining: '',
+                      phone: '',
+                      address: ''
+                    });
+                  }}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Employee
                   </Button>

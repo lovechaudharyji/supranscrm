@@ -157,12 +157,12 @@ export default function LeadDetailsPage() {
           <SiteHeader title="Lead Details" />
 
           {/* Main Content */}
-          <div className="flex flex-1 flex-col gap-3 p-3 pt-1 overflow-auto">
+          <div className="flex flex-1 flex-col gap-2 p-2 pt-0 overflow-auto">
             {/* Lead Header Card */}
             <Card className="bg-gradient-to-t from-primary/5 to-card shadow-sm">
-              <CardHeader className="pb-3">
+              <CardHeader className="pt-0 pb-2">
                 {/* Back Button - Above Photo */}
-                <div className="flex items-center mb-2">
+                <div className="flex items-center mb-0">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -173,8 +173,7 @@ export default function LeadDetailsPage() {
                     Back to Leads
                   </Button>
                 </div>
-                
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4">
                   <Avatar className="h-20 w-20 border-2 border-border">
                     {lead.assigned_to?.profile_photo && (
                       <AvatarImage src={lead.assigned_to.profile_photo} alt={lead.name || "Lead"} />
@@ -254,6 +253,14 @@ export default function LeadDetailsPage() {
                 </div>
               </CardHeader>
             </Card>
+
+            {/* Disposition Section */}
+            <DispositionSection
+              lead={lead}
+              updateLead={updateLead}
+              refreshLead={fetchLeadDetails}
+              fireToast={() => {}}
+            />
 
             {/* Lead Information Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -350,14 +357,6 @@ export default function LeadDetailsPage() {
                 </CardContent>
               </Card>
             )}
-
-            {/* Disposition Section */}
-            <DispositionSection
-              lead={lead}
-              updateLead={updateLead}
-              refreshLead={fetchLeadDetails}
-              fireToast={() => {}}
-            />
 
             {/* Call History */}
             {lead.calls && lead.calls.length > 0 && (
