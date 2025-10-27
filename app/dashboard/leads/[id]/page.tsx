@@ -157,12 +157,12 @@ export default function LeadDetailsPage() {
           <SiteHeader title="Lead Details" />
 
           {/* Main Content */}
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-2 overflow-auto">
+          <div className="flex flex-1 flex-col gap-3 p-3 pt-1 overflow-auto">
             {/* Lead Header Card */}
             <Card className="bg-gradient-to-t from-primary/5 to-card shadow-sm">
-              <CardHeader>
+              <CardHeader className="pb-3">
                 {/* Back Button - Above Photo */}
-                <div className="flex items-center mb-4">
+                <div className="flex items-center mb-2">
                   <Button
                     variant="ghost"
                     size="sm"
