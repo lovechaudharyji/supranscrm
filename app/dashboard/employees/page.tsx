@@ -40,7 +40,8 @@ import {
   Eye,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  GripVertical
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -56,24 +57,41 @@ import {
 } from "@hello-pangea/dnd";
 
 type Employee = {
-  id: number;
-  whalesync_postgres_id?: string;
+  whalesync_postgres_id: string;
   full_name: string;
-  official_email: string;
-  job_title: string;
-  profile_photo?: string;
-  teams?: { 
-    id: number; 
-    team_name: string; 
-  } | null;
-  reporting_manager?: {
-    id: number;
-    full_name: string;
-    profile_photo?: string;
-  } | null;
-  status: string;
+  aadhar_number?: string;
+  airtable_created_time?: string;
+  airtable_record_id?: string;
+  bank_details?: any;
+  calls?: any;
+  contacts?: any;
+  current_address?: string;
   date_of_joining?: string;
+  dob?: string;
+  emails_access?: any;
+  emergency_contact_details?: any;
+  employee_id?: string;
   employment_type?: string;
+  epf_deduction?: any;
+  esic_deduction?: any;
+  leads?: any;
+  linkedin_profile?: string;
+  monthly_payroll?: any;
+  official_contact_number?: string;
+  official_email: string;
+  official_number?: string;
+  pan_number?: string;
+  permanent_address?: string;
+  personal_contact_number?: string;
+  personal_email?: string;
+  profile_photo?: string;
+  status: string;
+  total_working_days_this_month?: number;
+  uan_number?: string;
+  work_mode?: string;
+  users?: any;
+  Notes?: string;
+  Announcement?: any;
 };
 
 type Team = {
@@ -82,12 +100,25 @@ type Team = {
   status: string;
 };
 
+type Department = {
+  whalesync_postgres_id: string;
+  department_name: string;
+  display_name?: string;
+  employees?: any;
+  head_manager?: any;
+  headcount?: number;
+  status: string;
+  teams?: any;
+};
+
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
   const [view, setView] = useState<'list' | 'grid' | 'kanban'>('list');
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   // Modify the type to allow more flexibility
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -138,10 +169,23 @@ export default function EmployeesPage() {
 
     // Deduplicate employees by ID to prevent duplicate keys
     const uniqueEmployees = filteredEmployees.filter((emp, index, self) => 
-      index === self.findIndex(e => e.id === emp.id)
+      index === self.findIndex(e => e.whalesync_postgres_id === emp.whalesync_postgres_id)
     );
 
+    // Debug: Log all unique status values
+    const statusCounts: { [key: string]: number } = {};
     uniqueEmployees.forEach(emp => {
+      const status = emp.status || 'undefined';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    
+    console.log('Employee status distribution:', statusCounts);
+    console.log('Total unique employees:', uniqueEmployees.length);
+
+    uniqueEmployees.forEach(emp => {
+      const status = emp.status || 'undefined';
+      console.log(`Employee: ${emp.full_name}, Status: "${status}"`);
+      
       switch(emp.status) {
         case 'Active':
           columns['Active'].push(emp);
@@ -154,7 +198,14 @@ export default function EmployeesPage() {
           break;
         default:
           columns['Active'].push(emp);
+          console.log(`Defaulting to Active: ${emp.full_name} with status "${emp.status}"`);
       }
+    });
+
+    console.log('Final column distribution:', {
+      Active: columns['Active'].length,
+      Onboarding: columns['Onboarding'].length,
+      Resigned: columns['Resigned'].length
     });
 
     setEmployeeColumns(columns);
@@ -162,16 +213,25 @@ export default function EmployeesPage() {
 
   // Kanban view drag and drop handler
   const handleEmployeeDragEnd = (result: DropResult) => {
+    console.log('Drag and drop triggered:', result);
     const { source, destination } = result;
     
     // If dropped outside a droppable area
-    if (!destination) return;
+    if (!destination) {
+      console.log('No destination, drag cancelled');
+      return;
+    }
 
     // If dropped in the same column and position
     if (
       source.droppableId === destination.droppableId && 
       source.index === destination.index
-    ) return;
+    ) {
+      console.log('Same position, no change needed');
+      return;
+    }
+
+    console.log('Moving employee from', source.droppableId, 'to', destination.droppableId);
 
     // Create a copy of the current columns
     const newColumns = { ...employeeColumns };
@@ -188,14 +248,36 @@ export default function EmployeesPage() {
     // Optional: Update employee status in database
     const updateEmployeeStatus = async () => {
       try {
+        // Check if reorderedEmployee has the required field
+        if (!reorderedEmployee || !reorderedEmployee.whalesync_postgres_id) {
+          console.error('Invalid employee data for status update:', reorderedEmployee);
+          return;
+        }
+
+        console.log('Updating employee status:', {
+          employeeId: reorderedEmployee.whalesync_postgres_id,
+          newStatus: destination.droppableId,
+          employeeName: reorderedEmployee.full_name
+        });
+
         const { error } = await supabase
           .from('Employee Directory')
           .update({ status: destination.droppableId })
-          .eq('id', reorderedEmployee.id);
+          .eq('whalesync_postgres_id', reorderedEmployee.whalesync_postgres_id);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+        
+        console.log('Employee status updated successfully');
       } catch (error) {
         console.error('Error updating employee status:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          error: error
+        });
         // Optionally revert the local state change
       }
     };
@@ -207,51 +289,103 @@ export default function EmployeesPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch teams with default values
-        const { data: teamsData, error: teamsError } = await supabase
-          .from('Teams')
-          .select('*');
-        if (teamsError) throw teamsError;
-
-        // Fetch employees with team and reporting manager details
-        const { data: employeesData, error: employeesError } = await supabase
+        console.log('Starting to fetch Employee Directory data...');
+        
+        // First, test basic connection to Employee Directory table
+        const { data: testData, error: testError } = await supabase
           .from('Employee Directory')
-          .select(`
-            *,
-            teams:teams(*),
-            reporting_manager:reporting_manager(*)
-          `);
-        if (employeesError) throw employeesError;
+          .select('count')
+          .limit(1);
+        
+        if (testError) {
+          console.error('Employee Directory connection test failed:', testError);
+          throw new Error(`Employee Directory table error: ${testError.message}`);
+        }
+        
+        console.log('Employee Directory connection successful, fetching full data...');
 
-        // Ensure data is not null and has default values
-        const safeTeamsData = (teamsData || []).map((team, index) => ({
-          id: team.id ?? index,
-          team_name: team.team_name ?? `Unnamed Team ${index}`,
-          status: team.status ?? 'Active'
+        // Fetch departments and employees in parallel
+        const [
+          { data: departmentsData, error: departmentsError },
+          { data: employeesData, error: employeesError }
+        ] = await Promise.all([
+          supabase.from('Departments').select('*'),
+          supabase.from('Employee Directory').select(`
+            *,
+            department:department(*)
+          `)
+        ]);
+        
+        if (departmentsError) {
+          console.error('Departments fetch error:', departmentsError);
+          // Don't throw, just log and continue
+        }
+        
+        if (employeesError) {
+          console.error('Employee Directory fetch error:', employeesError);
+          throw new Error(`Failed to fetch employees: ${employeesError.message}`);
+        }
+
+        console.log('Raw employees data received:', employeesData?.length || 0, 'records');
+        console.log('Raw departments data received:', departmentsData?.length || 0, 'records');
+
+        // Process departments data
+        const safeDepartmentsData = (departmentsData || []).map((dept, index) => ({
+          ...dept,
+          whalesync_postgres_id: dept.whalesync_postgres_id || `dept_${index}`,
+          department_name: dept.department_name || `Unnamed Department ${index}`,
+          display_name: dept.display_name || dept.department_name || `Unnamed Department ${index}`,
+          status: dept.status || 'Active',
+          headcount: dept.headcount || 0
         }));
 
+        // Process employee data
         const safeEmployeesData = (employeesData || []).map((emp, index) => ({
           ...emp,
-          id: emp.id ?? index,
-          teams: emp.teams ?? null,
-          reporting_manager: emp.reporting_manager ?? null,
-          full_name: emp.full_name ?? `Unnamed Employee ${index}`,
-          official_email: emp.official_email ?? '',
-          job_title: emp.job_title ?? 'Unassigned',
-          status: emp.status ?? 'Active'
+          whalesync_postgres_id: emp.whalesync_postgres_id || `emp_${index}`,
+          full_name: emp.full_name || `Unnamed Employee ${index}`,
+          official_email: emp.official_email || '',
+          employment_type: emp.employment_type || 'Full-time',
+          status: emp.status || 'Active',
+          profile_photo: emp.profile_photo || null,
+          date_of_joining: emp.date_of_joining || null,
+          work_mode: emp.work_mode || 'Office',
+          department: emp.department || null
         }));
 
-        setTeams(safeTeamsData);
+        console.log('Processed employees data:', safeEmployeesData.length, 'records');
+        console.log('Sample employee:', safeEmployeesData[0]);
+        
+        // Debug: Check status values in the data
+        const statusValues = safeEmployeesData.map(emp => emp.status).filter((status, index, self) => self.indexOf(status) === index);
+        console.log('Unique status values in data:', statusValues);
+        
+        const statusCounts = safeEmployeesData.reduce((acc, emp) => {
+          const status = emp.status || 'undefined';
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, {} as { [key: string]: number });
+        console.log('Status counts in raw data:', statusCounts);
+
+        // Set data
+        setTeams([]);
+        setDepartments(safeDepartmentsData);
         setEmployees(safeEmployeesData);
+        
+        console.log('Data successfully loaded into state');
       } catch (error) {
         console.error('Error fetching data:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
     };
 
     fetchData();
   }, []);
 
-  // Filter and sort employees based on search, team, and sorting
+  // Filter and sort employees based on search, team, department, and sorting
   useEffect(() => {
     let result = employees;
     
@@ -259,11 +393,18 @@ export default function EmployeesPage() {
       result = result.filter(emp => emp.teams?.id == Number(teamFilter));
     }
     
+    if (departmentFilter !== 'all') {
+      result = result.filter(emp => emp.department?.whalesync_postgres_id === departmentFilter);
+    }
+    
     if (searchTerm) {
       const searchTermLower = searchTerm.toLowerCase();
       result = result.filter(emp => 
-        emp.full_name.toLowerCase().includes(searchTermLower) ||
-        emp.official_email.toLowerCase().includes(searchTermLower)
+        (emp.full_name && emp.full_name.toLowerCase().includes(searchTermLower)) ||
+        (emp.official_email && emp.official_email.toLowerCase().includes(searchTermLower)) ||
+        (emp.employment_type && emp.employment_type.toLowerCase().includes(searchTermLower)) ||
+        (emp.employee_id && emp.employee_id.toLowerCase().includes(searchTermLower)) ||
+        (emp.department?.department_name && emp.department.department_name.toLowerCase().includes(searchTermLower))
       );
     }
 
@@ -278,14 +419,6 @@ export default function EmployeesPage() {
             aValue = a.full_name || '';
             bValue = b.full_name || '';
             break;
-          case 'job_title':
-            aValue = a.job_title || '';
-            bValue = b.job_title || '';
-            break;
-          case 'team':
-            aValue = a.teams?.team_name || '';
-            bValue = b.teams?.team_name || '';
-            break;
           case 'employment_type':
             aValue = a.employment_type || '';
             bValue = b.employment_type || '';
@@ -293,6 +426,18 @@ export default function EmployeesPage() {
           case 'status':
             aValue = a.status || '';
             bValue = b.status || '';
+            break;
+          case 'work_mode':
+            aValue = a.work_mode || '';
+            bValue = b.work_mode || '';
+            break;
+          case 'department':
+            aValue = a.department?.department_name || '';
+            bValue = b.department?.department_name || '';
+            break;
+          case 'date_of_joining':
+            aValue = a.date_of_joining || '';
+            bValue = b.date_of_joining || '';
             break;
           default:
             return 0;
@@ -308,7 +453,7 @@ export default function EmployeesPage() {
     }
     
     setFilteredEmployees(result);
-  }, [employees, teamFilter, searchTerm, sortColumn, sortDirection]);
+  }, [employees, teamFilter, departmentFilter, searchTerm, sortColumn, sortDirection]);
 
   // Handle column sorting
   const handleSort = (column: string) => {
@@ -347,21 +492,309 @@ export default function EmployeesPage() {
     }
   };
 
-  // Handle employee deletion
-  const handleDelete = async (id: number) => {
+  // Handle employee deletion with cascade delete
+  const handleDelete = async (whalesync_postgres_id: string) => {
+    if (!confirm('Are you sure you want to delete this employee and ALL their related data? This action cannot be undone and will delete:\n\n• All their leads\n• All their call records\n• All their attendance records\n• All their documents\n• All their tasks\n• All their subscriptions\n\nThis will completely remove the employee from the system!\n\nThis is a permanent action!')) {
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      console.log('Starting employee deletion process...');
+
+      // STEP 1: Break circular references in Employee Directory first
+      console.log('Step 1: Breaking circular references in Employee Directory...');
+      
+      const { error: updateEmployeeError } = await supabase
+        .from('Employee Directory')
+        .update({ 
+          attendance: null,
+          employee_documents: null,
+          calls: null,
+          leads: null,
+          users: null,
+          teams: null,
+          department: null,
+          reporting_manager: null,
+          from_field_reporting_manager: null,
+          team_head_of: null
+        })
+        .eq('whalesync_postgres_id', whalesync_postgres_id);
+      
+      if (updateEmployeeError) {
+        console.warn('Warning: Could not update Employee Directory references:', updateEmployeeError);
+      } else {
+        console.log('Successfully broke circular references in Employee Directory');
+      }
+
+      // STEP 2: Delete from all related tables
+      console.log('Step 2: Deleting from all related tables...');
+
+      // Delete from Attendance first (most critical)
+      console.log('Deleting Attendance records...');
+      
+      // First, check how many attendance records exist
+      const { count: attendanceCount } = await supabase
+        .from('Attendance')
+        .select('*', { count: 'exact', head: true })
+        .eq('employee', whalesync_postgres_id);
+      
+      console.log(`Found ${attendanceCount} attendance records to delete`);
+      
+      if (attendanceCount && attendanceCount > 0) {
+        // First, update department references in Attendance to null to break constraints
+        const { error: updateAttendanceDeptError } = await supabase
+          .from('Attendance')
+          .update({ department_name_from_employee: null })
+          .eq('employee', whalesync_postgres_id);
+        
+        if (updateAttendanceDeptError) {
+          console.warn('Warning: Could not update department references in Attendance:', updateAttendanceDeptError);
+        } else {
+          console.log('Successfully updated department references in Attendance');
+        }
+        
+        // Now delete the attendance records
+        const { error: attendanceError, count: deletedCount } = await supabase
+          .from('Attendance')
+          .delete({ count: 'exact' })
+          .eq('employee', whalesync_postgres_id);
+        
+        if (attendanceError) {
+          console.error('Error deleting attendance:', attendanceError);
+          throw new Error(`Failed to delete attendance records: ${attendanceError.message}`);
+        }
+        
+        console.log(`Successfully deleted ${deletedCount} Attendance records`);
+        
+        // Verify deletion
+        const { count: remainingCount } = await supabase
+          .from('Attendance')
+          .select('*', { count: 'exact', head: true })
+          .eq('employee', whalesync_postgres_id);
+        
+        if (remainingCount && remainingCount > 0) {
+          console.error(`WARNING: ${remainingCount} attendance records still exist after deletion attempt!`);
+          throw new Error(`Failed to delete all attendance records. ${remainingCount} records still exist.`);
+        } else {
+          console.log('Verified: All attendance records deleted successfully');
+        }
+      } else {
+        console.log('No attendance records found to delete');
+      }
+
+      // Delete from Employee Documents
+      console.log('Deleting Employee Documents...');
+      const { error: documentsError } = await supabase
+        .from('Employee Documents')
+        .delete()
+        .eq('employee', whalesync_postgres_id);
+      if (documentsError) {
+        console.error('Error deleting employee documents:', documentsError);
+        throw new Error(`Failed to delete employee documents: ${documentsError.message}`);
+      }
+      console.log('Successfully deleted Employee Documents');
+
+      // Delete from Leads
+      console.log('Deleting Leads...');
+      const { error: leadsError } = await supabase
+        .from('Leads')
+        .delete()
+        .eq('assigned_to', whalesync_postgres_id);
+      if (leadsError) {
+        console.error('Error deleting leads:', leadsError);
+        throw new Error(`Failed to delete leads: ${leadsError.message}`);
+      }
+      console.log('Successfully deleted Leads');
+
+      // Delete from Calls
+      console.log('Deleting Calls...');
+      const { error: callsError } = await supabase
+        .from('Calls')
+        .delete()
+        .eq('employee', whalesync_postgres_id);
+      if (callsError) {
+        console.error('Error deleting calls:', callsError);
+        throw new Error(`Failed to delete calls: ${callsError.message}`);
+      }
+      console.log('Successfully deleted Calls');
+
+      // Delete from Users
+      console.log('Deleting Users...');
+      const { error: usersError } = await supabase
+        .from('Users')
+        .delete()
+        .eq('employee', whalesync_postgres_id);
+      if (usersError) {
+        console.warn('Warning: Could not delete users:', usersError);
+      } else {
+        console.log('Successfully deleted Users');
+      }
+
+      // Delete from Tasks
+      console.log('Deleting Tasks...');
+      const { error: tasksError } = await supabase
+        .from('Tasks')
+        .delete()
+        .eq('Assignee', whalesync_postgres_id);
+      if (tasksError) console.warn('Warning: Could not delete Tasks:', tasksError);
+
+      const { error: tasks2Error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('assignee', whalesync_postgres_id);
+      if (tasks2Error) console.warn('Warning: Could not delete tasks:', tasks2Error);
+
+      // Delete from Subscriptions
+      console.log('Deleting Subscriptions...');
+      const { error: subsVendorError } = await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('vendor_id', whalesync_postgres_id);
+      if (subsVendorError) console.warn('Warning: Could not delete subscription vendor:', subsVendorError);
+
+      const { error: subsOwnerError } = await supabase
+        .from('subscriptions')
+        .delete()
+        .eq('owner_id', whalesync_postgres_id);
+      if (subsOwnerError) console.warn('Warning: Could not delete subscription owner:', subsOwnerError);
+
+      const { error: subUsersError } = await supabase
+        .from('subscription_users')
+        .delete()
+        .eq('user_id', whalesync_postgres_id);
+      if (subUsersError) console.warn('Warning: Could not delete subscription users:', subUsersError);
+
+      // Delete from Documents
+      console.log('Deleting Documents...');
+      const { error: docsError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('created_by', whalesync_postgres_id);
+      if (docsError) console.warn('Warning: Could not delete documents:', docsError);
+
+      const { error: docAssignError1 } = await supabase
+        .from('document_assignments')
+        .delete()
+        .eq('employee_id', whalesync_postgres_id);
+      if (docAssignError1) console.warn('Warning: Could not delete document assignments 1:', docAssignError1);
+
+      const { error: docAssignError2 } = await supabase
+        .from('document_assignments')
+        .delete()
+        .eq('assigned_by', whalesync_postgres_id);
+      if (docAssignError2) console.warn('Warning: Could not delete document assignments 2:', docAssignError2);
+
+      // STEP 3: Remove employee from Departments and Teams (AGGRESSIVE APPROACH)
+      console.log('Step 3: Aggressively removing employee from Departments and Teams...');
+      
+      // Get all departments that might reference this employee
+      const { data: departmentsData } = await supabase
+        .from('Departments')
+        .select('whalesync_postgres_id, employees, head_manager')
+        .or(`employees.cs.{${whalesync_postgres_id}},head_manager.eq.${whalesync_postgres_id}`);
+      
+      if (departmentsData) {
+        for (const dept of departmentsData) {
+          // Update employees array to remove this employee
+          if (dept.employees && Array.isArray(dept.employees)) {
+            const updatedEmployees = dept.employees.filter(id => id !== whalesync_postgres_id);
+            const { error: updateDeptError } = await supabase
+              .from('Departments')
+              .update({ employees: updatedEmployees })
+              .eq('whalesync_postgres_id', dept.whalesync_postgres_id);
+            
+            if (updateDeptError) {
+              console.warn(`Warning: Could not update department ${dept.whalesync_postgres_id}:`, updateDeptError);
+            } else {
+              console.log(`Successfully removed from department ${dept.whalesync_postgres_id}`);
+            }
+          }
+          
+          // Update head_manager if it's this employee
+          if (dept.head_manager === whalesync_postgres_id) {
+            const { error: updateHeadError } = await supabase
+              .from('Departments')
+              .update({ head_manager: null })
+              .eq('whalesync_postgres_id', dept.whalesync_postgres_id);
+            
+            if (updateHeadError) {
+              console.warn(`Warning: Could not update department head ${dept.whalesync_postgres_id}:`, updateHeadError);
+            } else {
+              console.log(`Successfully removed as head of department ${dept.whalesync_postgres_id}`);
+            }
+          }
+        }
+      }
+
+      // Get all teams that might reference this employee
+      const { data: teamsData } = await supabase
+        .from('Teams')
+        .select('whalesync_postgres_id, team_members, team_lead')
+        .or(`team_members.cs.{${whalesync_postgres_id}},team_lead.eq.${whalesync_postgres_id}`);
+      
+      if (teamsData) {
+        for (const team of teamsData) {
+          // Update team_members array to remove this employee
+          if (team.team_members && Array.isArray(team.team_members)) {
+            const updatedMembers = team.team_members.filter(id => id !== whalesync_postgres_id);
+            const { error: updateTeamError } = await supabase
+              .from('Teams')
+              .update({ team_members: updatedMembers })
+              .eq('whalesync_postgres_id', team.whalesync_postgres_id);
+            
+            if (updateTeamError) {
+              console.warn(`Warning: Could not update team ${team.whalesync_postgres_id}:`, updateTeamError);
+            } else {
+              console.log(`Successfully removed from team ${team.whalesync_postgres_id}`);
+            }
+          }
+          
+          // Update team_lead if it's this employee
+          if (team.team_lead === whalesync_postgres_id) {
+            const { error: updateLeadError } = await supabase
+              .from('Teams')
+              .update({ team_lead: null })
+              .eq('whalesync_postgres_id', team.whalesync_postgres_id);
+            
+            if (updateLeadError) {
+              console.warn(`Warning: Could not update team lead ${team.whalesync_postgres_id}:`, updateLeadError);
+            } else {
+              console.log(`Successfully removed as lead of team ${team.whalesync_postgres_id}`);
+            }
+          }
+        }
+      }
+
+      // STEP 4: Finally, delete the employee record
+      console.log('Step 4: Deleting the employee record...');
+      const { error: deleteEmployeeError } = await supabase
         .from('Employee Directory')
         .delete()
-        .eq('id', id);
+        .eq('whalesync_postgres_id', whalesync_postgres_id);
       
-      if (error) throw error;
+      if (deleteEmployeeError) {
+        console.error('Error deleting employee record:', deleteEmployeeError);
+        throw new Error(`Failed to delete employee record: ${deleteEmployeeError.message}`);
+      }
+      
+      console.log('Successfully deleted employee record');
       
       // Remove deleted employee from state
-      setEmployees(prev => prev.filter(emp => emp.id !== id));
+      setEmployees(prev => prev.filter(emp => emp.whalesync_postgres_id !== whalesync_postgres_id));
+      
+      // Show success message
+      alert('Employee and ALL related data deleted successfully! The employee has been completely removed from the system.');
     } catch (error) {
       console.error('Error deleting employee:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      alert(`Failed to delete employee: ${error.message || 'Unknown error'}`);
     }
+  };
+
+  // Handle view employee details
+  const handleViewDetails = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setDetailsModalOpen(true);
   };
 
   // Render employee list view (without pagination)
@@ -379,37 +812,46 @@ export default function EmployeesPage() {
               {renderSortIcon('name')}
             </Button>
           </TableHead>
-          <TableHead>
-            <Button
-              variant="ghost"
-              onClick={() => handleSort('job_title')}
-              className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-            >
-              Job Title
-              {renderSortIcon('job_title')}
-            </Button>
-          </TableHead>
-          <TableHead>
-            <Button
-              variant="ghost"
-              onClick={() => handleSort('team')}
-              className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-            >
-              Team
-              {renderSortIcon('team')}
-            </Button>
-          </TableHead>
-          <TableHead>Reporting Manager</TableHead>
-          <TableHead>
-            <Button
-              variant="ghost"
-              onClick={() => handleSort('employment_type')}
-              className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
-            >
-              Employment Type
-              {renderSortIcon('employment_type')}
-            </Button>
-          </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('employment_type')}
+                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+              >
+                Employment Type
+                {renderSortIcon('employment_type')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('work_mode')}
+                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+              >
+                Work Mode
+                {renderSortIcon('work_mode')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('department')}
+                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+              >
+                Department
+                {renderSortIcon('department')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('date_of_joining')}
+                className="h-7 px-2 hover:bg-transparent text-xs font-semibold"
+              >
+                Date of Joining
+                {renderSortIcon('date_of_joining')}
+              </Button>
+            </TableHead>
           <TableHead>
             <Button
               variant="ghost"
@@ -444,8 +886,7 @@ export default function EmployeesPage() {
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedEmployeeId(emp.id);
-                      setDetailsModalOpen(true);
+                      handleViewDetails(emp);
                     }}
                     data-action="view"
                     className="h-6 w-6 hover:bg-muted flex-shrink-0"
@@ -455,9 +896,9 @@ export default function EmployeesPage() {
                   <Avatar className="h-8 w-8">
                     <AvatarImage 
                       src={emp.profile_photo || '/placeholder-avatar.png'} 
-                      alt={emp.full_name} 
+                      alt={emp.full_name || 'Employee'} 
                     />
-                    <AvatarFallback>{emp.full_name.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>{(emp.full_name && emp.full_name.charAt(0)) || 'E'}</AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="font-medium">{emp.full_name}</div>
@@ -465,32 +906,21 @@ export default function EmployeesPage() {
                   </div>
                 </div>
               </TableCell>
-              <TableCell>{emp.job_title}</TableCell>
+              <TableCell>
+                <span className="text-sm">{emp.employment_type || 'Not specified'}</span>
+              </TableCell>
               <TableCell>
                 <Badge variant="outline">
-                  {emp.teams?.team_name || 'Unassigned'}
+                  {emp.work_mode || 'Not specified'}
                 </Badge>
               </TableCell>
               <TableCell>
-                {emp.reporting_manager ? (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar className="h-6 w-6 flex-shrink-0">
-                      <AvatarImage 
-                        src={emp.reporting_manager.profile_photo || '/placeholder-avatar.png'} 
-                        alt={emp.reporting_manager.full_name} 
-                      />
-                      <AvatarFallback className="text-[10px]">
-                        {emp.reporting_manager.full_name.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs">{emp.reporting_manager.full_name}</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">-</span>
-                )}
+                <Badge variant="secondary">
+                  {emp.department?.department_name || 'No Department'}
+                </Badge>
               </TableCell>
               <TableCell>
-                <span className="text-xs">{emp.employment_type || '-'}</span>
+                <span className="text-xs">{emp.date_of_joining ? new Date(emp.date_of_joining).toLocaleDateString() : 'Not specified'}</span>
               </TableCell>
               <TableCell>
                 <Badge variant={getStatusBadgeVariant(emp.status)}>
@@ -516,7 +946,7 @@ export default function EmployeesPage() {
                     size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(emp.id);
+                      handleDelete(emp.whalesync_postgres_id);
                     }}
                     data-action="delete"
                     className="h-7 w-7 hover:bg-muted hover:text-destructive"
@@ -545,11 +975,11 @@ export default function EmployeesPage() {
             <Avatar className="h-12 w-12 flex-shrink-0">
               <AvatarImage 
                 src={emp.profile_photo || '/placeholder-avatar.png'} 
-                alt={emp.full_name}
+                alt={emp.full_name || 'Employee'}
                 className="object-cover"
               />
               <AvatarFallback className="text-sm font-semibold bg-muted">
-                {emp.full_name.charAt(0)}
+                {(emp.full_name && emp.full_name.charAt(0)) || 'E'}
               </AvatarFallback>
             </Avatar>
             
@@ -566,36 +996,47 @@ export default function EmployeesPage() {
 
           {/* Middle Section - Details with colored dots */}
           <div className="space-y-2 mb-4">
-            {/* Team */}
+            {/* Employment Type */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-gray-500 rounded-full"></div>
-                <span className="text-xs text-muted-foreground">Team</span>
-              </div>
-              <span className="text-xs text-foreground">
-                {emp.teams?.team_name || 'Unassigned'}
-              </span>
-            </div>
-
-            {/* Type */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                 <span className="text-xs text-muted-foreground">Type</span>
               </div>
               <span className="text-xs text-foreground">
-                {emp.employment_type || 'Intern'}
+                {emp.employment_type || 'Not specified'}
               </span>
             </div>
 
-            {/* ID */}
+            {/* Work Mode */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">Work Mode</span>
+              </div>
+              <span className="text-xs text-foreground">
+                {emp.work_mode || 'Not specified'}
+              </span>
+            </div>
+
+            {/* Department */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                <span className="text-xs text-muted-foreground">Department</span>
+              </div>
+              <span className="text-xs text-foreground">
+                {emp.department?.department_name || 'No Department'}
+              </span>
+            </div>
+
+            {/* Employee ID */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
                 <span className="text-xs text-muted-foreground">ID</span>
               </div>
               <span className="text-xs text-foreground font-mono">
-                #{emp.id}
+                {emp.employee_id || emp.whalesync_postgres_id?.slice(0, 8) || 'N/A'}
               </span>
             </div>
           </div>
@@ -622,10 +1063,7 @@ export default function EmployeesPage() {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => {
-                  setSelectedEmployeeId(emp.id);
-                  setDetailsModalOpen(true);
-                }}
+                onClick={() => handleViewDetails(emp)}
                 className="h-6 w-6 text-muted-foreground hover:text-foreground"
               >
                 <Eye className="h-3 w-3" />
@@ -641,7 +1079,7 @@ export default function EmployeesPage() {
               <Button 
                 variant="ghost" 
                 size="icon"
-                onClick={() => handleDelete(emp.id)}
+                onClick={() => handleDelete(emp.whalesync_postgres_id)}
                 className="h-6 w-6 text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="h-3 w-3" />
@@ -677,8 +1115,8 @@ export default function EmployeesPage() {
                   <CardContent className="space-y-2 px-2 pb-2">
                     {columnEmployees.map((emp, index) => (
                       <Draggable 
-                        key={`${columnName}-${emp.id}-${index}`} 
-                        draggableId={`${columnName}-${emp.id}`} 
+                        key={`${columnName}-${emp.whalesync_postgres_id}-${index}`} 
+                        draggableId={`${columnName}-${emp.whalesync_postgres_id}`}
                         index={index}
                       >
                         {(provided: DraggableProvided, snapshot: { isDragging: boolean }) => (
@@ -687,16 +1125,16 @@ export default function EmployeesPage() {
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             onClick={() => {
-                              setSelectedEmployeeId(emp.id);
-                              setDetailsModalOpen(true);
+                              handleViewDetails(emp);
                             }}
-                            className={`bg-card border border-border rounded-md p-2 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+                            className={`bg-card border border-border rounded-md p-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
                               snapshot.isDragging
                                 ? "rotate-1 scale-[1.02] shadow-lg"
                                 : ""
                             }`}
                           >
                             <div className="flex items-center gap-2">
+                              <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                               {emp.profile_photo ? (
                                 <img
                                   src={emp.profile_photo}
@@ -705,7 +1143,7 @@ export default function EmployeesPage() {
                                 />
                               ) : (
                                 <div className="w-8 h-8 rounded-full bg-muted flex-shrink-0 flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                                  {emp.full_name?.charAt(0)?.toUpperCase() || "?"}
+                                  {(emp.full_name && emp.full_name.charAt(0)?.toUpperCase()) || "E"}
                                 </div>
                               )}
 
@@ -714,17 +1152,17 @@ export default function EmployeesPage() {
                                   {emp.full_name || "Unnamed Employee"}
                                 </p>
                                 <p className="text-xs text-muted-foreground truncate">
-                                  {emp.job_title || "—"}
+                                  {emp.employment_type || "—"}
                                 </p>
                               </div>
                             </div>
 
                             <div className="mt-2 flex justify-between items-center gap-2">
                               <p className="text-xs text-muted-foreground truncate flex-1">
-                                {emp.teams?.team_name || "No team"}
+                                {emp.department?.department_name || "No department"}
                               </p>
                               <span className="text-xs text-muted-foreground truncate max-w-[80px]">
-                                {emp.reporting_manager?.full_name || "Unassigned"}
+                                {emp.status || "Unknown"}
                               </span>
                             </div>
                           </div>
@@ -933,6 +1371,20 @@ export default function EmployeesPage() {
                     </SelectContent>
                   </Select>
                   
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="All Departments" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departments.filter(dept => dept && dept.whalesync_postgres_id && dept.department_name).map(dept => (
+                        <SelectItem key={dept.whalesync_postgres_id} value={dept.whalesync_postgres_id}>
+                          {dept.department_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
                   {renderViewToggle()}
                   
                   <Button onClick={() => setSelectedEmployee({} as Employee)}>
@@ -1021,11 +1473,11 @@ export default function EmployeesPage() {
 
       {/* Employee Details Modal */}
       <EmployeeDetailsModal
-        employeeId={selectedEmployeeId}
+        employeeId={selectedEmployee ? selectedEmployee.whalesync_postgres_id : null}
         open={detailsModalOpen}
         onClose={() => {
           setDetailsModalOpen(false);
-          setSelectedEmployeeId(null);
+          setSelectedEmployee(null);
         }}
       />
     </div>

@@ -170,8 +170,8 @@ export default function HRAttendancePage() {
       
       // Fetch departments
       const { data: departmentsData, error: departmentsError } = await supabase
-        .from('Departments')
-        .select('whalesync_postgres_id, department_name, display_name');
+        .from('Teams')
+        .select('whalesync_postgres_id, team_name');
       
       if (departmentsError) {
         console.error('Error fetching departments:', departmentsError);
@@ -180,8 +180,8 @@ export default function HRAttendancePage() {
       
       // Create department lookup
       const departmentLookup = {};
-      departmentsData?.forEach(dept => {
-        departmentLookup[dept.whalesync_postgres_id] = dept.display_name || dept.department_name;
+      departmentsData?.forEach(team => {
+        departmentLookup[team.whalesync_postgres_id] = team.team_name;
       });
       
       // Transform employees data

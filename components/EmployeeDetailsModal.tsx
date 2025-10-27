@@ -114,7 +114,7 @@ interface DocumentData {
 }
 
 interface EmployeeDetailsModalProps {
-  employeeId: number | null;
+  employeeId: string | null;
   open: boolean;
   onClose: () => void;
 }
@@ -155,42 +155,26 @@ export function EmployeeDetailsModal({ employeeId, open, onClose }: EmployeeDeta
     setLoading(true);
 
     try {
-      // Try to fetch employee directly by id (numeric) or whalesync_postgres_id
+      // Try to fetch employee directly by whalesync_postgres_id
       let employee = null;
       let employeeUUID = null;
 
-      // First try by id field
-      const { data: empById, error: idError } = await supabase
+      // Try by whalesync_postgres_id (string)
+      const { data: empByUUID, error: uuidError } = await supabase
         .from("Employee Directory")
         .select(`
           *,
           department_data:department(whalesync_postgres_id, department_name),
           manager_data:reporting_manager(whalesync_postgres_id, full_name, profile_photo, job_title, official_email)
         `)
-        .eq("id", employeeId)
-        .maybeSingle();
+        .eq("whalesync_postgres_id", employeeId)
+        .single();
 
-      if (empById) {
-        employee = empById;
-        employeeUUID = empById.whalesync_postgres_id;
-      } else {
-        // If not found by id, try by whalesync_postgres_id
-        const { data: empByUUID, error: uuidError } = await supabase
-          .from("Employee Directory")
-          .select(`
-            *,
-            department_data:department(whalesync_postgres_id, department_name),
-            manager_data:reporting_manager(whalesync_postgres_id, full_name, profile_photo, job_title, official_email)
-          `)
-          .eq("whalesync_postgres_id", employeeId.toString())
-          .single();
-
-        if (uuidError || !empByUUID) {
-          throw new Error("Employee not found");
-        }
-        employee = empByUUID;
-        employeeUUID = empByUUID.whalesync_postgres_id;
+      if (uuidError || !empByUUID) {
+        throw new Error("Employee not found");
       }
+      employee = empByUUID;
+      employeeUUID = empByUUID.whalesync_postgres_id;
 
       if (!employee || !employeeUUID) {
         throw new Error("Employee not found");

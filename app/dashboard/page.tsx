@@ -88,19 +88,26 @@ export default function Page() {
   const fetchDeptEmployees = async (
     deptName: string
   ): Promise<Employee[] | null> => {
-    const { data, error } = await supabase
+    // First get the department ID
+    const { data: deptData, error: deptError } = await supabase
       .from("Departments")
-      .select(
-        "whalesync_postgres_id, department_name, employees!inner (whalesync_postgres_id, full_name, job_title, status)"
-      )
+      .select("whalesync_postgres_id")
       .eq("department_name", deptName)
-      .eq("employees.status", "Active")
-      .ilike("employees.job_title", "%Sales%")
-      .limit(1)
       .single();
 
-    if (error) return null;
-    return (data?.employees || []) as Employee[];
+    if (deptError || !deptData) return null;
+
+    // Then get employees from that department
+    const { data: employeesData, error: employeesError } = await supabase
+      .from("Employee Directory")
+      .select("whalesync_postgres_id, full_name, job_title, status")
+      .eq("department", deptData.whalesync_postgres_id)
+      .eq("status", "Active")
+      .ilike("job_title", "%Sales%")
+      .limit(1);
+
+    if (employeesError) return null;
+    return (employeesData || []) as Employee[];
   };
 
   // Load Dashboard

@@ -342,3 +342,4 @@ export function CompetencyCard({ name, rating, targetRating, comments, improveme
 
 
 
+

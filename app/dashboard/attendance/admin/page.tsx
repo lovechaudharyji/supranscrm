@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -49,7 +49,8 @@ import {
   ArrowUp,
   ArrowDown,
   Building2,
-  DollarSign
+  DollarSign,
+  CheckSquare
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -91,6 +92,7 @@ interface ExceptionAlert {
 
 export default function AdminAttendancePage() {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([]);
   const [exceptionAlerts, setExceptionAlerts] = useState<ExceptionAlert[]>([]);
   const [filteredData, setFilteredData] = useState<AttendanceRecord[]>([]);
@@ -124,6 +126,29 @@ export default function AdminAttendancePage() {
   });
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    type: 'checkin' | 'checkout' | 'late' | 'absent';
+    employeeName: string;
+    time: string;
+    message: string;
+  }>>([]);
+  const [isManualAttendanceOpen, setIsManualAttendanceOpen] = useState(false);
+  const [selectedEmployeeForManual, setSelectedEmployeeForManual] = useState<any>(null);
+  const [manualAttendanceForm, setManualAttendanceForm] = useState({
+    status: 'Present',
+    timeIn: '09:00',
+    timeOut: '17:00',
+    notes: ''
+  });
+  const [isEditAttendanceOpen, setIsEditAttendanceOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [editForm, setEditForm] = useState({
+    status: '',
+    timeIn: '',
+    timeOut: '',
+    notes: ''
+  });
 
   // Executive Dashboard Stats
   const [dashboardStats, setDashboardStats] = useState({
@@ -138,6 +163,70 @@ export default function AdminAttendancePage() {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Function to detect new attendance events and create notifications
+  const detectNewAttendanceEvents = (newData: AttendanceRecord[], oldData: AttendanceRecord[]) => {
+    if (!oldData || oldData.length === 0 || !newData || newData.length === 0) return; // Skip on first load or if no data
+    
+    const newEvents: Array<{
+      id: string;
+      type: 'checkin' | 'checkout' | 'late' | 'absent';
+      employeeName: string;
+      time: string;
+      message: string;
+    }> = [];
+    
+    // Check for new check-ins (time_in was null/empty, now has value)
+    newData.forEach(newRecord => {
+      const oldRecord = oldData.find(old => 
+        old.employee_id === newRecord.employee_id && 
+        old.date === newRecord.date
+      );
+      
+      if (oldRecord) {
+        // New check-in detected
+        if (!oldRecord.time_in && newRecord.time_in && newRecord.time_in !== 'N/A') {
+          const isLate = newRecord.status === 'Late';
+          newEvents.push({
+            id: `checkin-${newRecord.id}-${Date.now()}`,
+            type: isLate ? 'late' : 'checkin',
+            employeeName: newRecord.employee_name,
+            time: new Date().toLocaleTimeString(),
+            message: isLate 
+              ? `${newRecord.employee_name} checked in late at ${newRecord.time_in}`
+              : `${newRecord.employee_name} checked in at ${newRecord.time_in}`
+          });
+        }
+        
+        // New check-out detected
+        if (!oldRecord.time_out && newRecord.time_out && newRecord.time_out !== 'N/A') {
+          newEvents.push({
+            id: `checkout-${newRecord.id}-${Date.now()}`,
+            type: 'checkout',
+            employeeName: newRecord.employee_name,
+            time: new Date().toLocaleTimeString(),
+            message: `${newRecord.employee_name} checked out at ${newRecord.time_out}`
+          });
+        }
+      }
+    });
+    
+    // Add new notifications
+    if (newEvents.length > 0) {
+      setNotifications(prev => [...newEvents, ...prev].slice(0, 10)); // Keep last 10 notifications
+      
+      // Show toast notifications
+      newEvents.forEach(event => {
+        if (event.type === 'checkin') {
+          toast.success(event.message);
+        } else if (event.type === 'checkout') {
+          toast.info(event.message);
+        } else if (event.type === 'late') {
+          toast.warning(event.message);
+        }
+      });
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -166,33 +255,47 @@ export default function AdminAttendancePage() {
         throw employeesError;
       }
       
-      // Fetch departments
+      // Fetch teams (departments)
       const { data: departmentsData, error: departmentsError } = await supabase
-        .from('Departments')
-        .select('whalesync_postgres_id, department_name, display_name');
+        .from('Teams')
+        .select('whalesync_postgres_id, team_name');
       
       if (departmentsError) {
         console.error('Error fetching departments:', departmentsError);
         throw departmentsError;
       }
       
-      // Create department lookup
+      // Create department lookup using Teams table structure
       const departmentLookup = {};
-      departmentsData?.forEach(dept => {
-        departmentLookup[dept.whalesync_postgres_id] = dept.display_name || dept.department_name;
+      departmentsData?.forEach(team => {
+        // Map by team whalesync_postgres_id (this should match the UUIDs in employee.department)
+        departmentLookup[team.whalesync_postgres_id] = team.team_name;
+        // Also map by team_name in case the employee.department field contains team names
+        departmentLookup[team.team_name] = team.team_name;
       });
       
+      console.log("Department lookup created:", departmentLookup);
+      console.log("Departments data:", departmentsData);
+      console.log("Sample employee data:", employeesData?.slice(0, 3));
+      console.log("Available team IDs:", departmentsData?.map(d => d.whalesync_postgres_id));
+      console.log("Employee department IDs:", employeesData?.map(e => e.department).filter(Boolean));
+      
       // Transform employees data
-      const transformedEmployees = employeesData?.map(emp => ({
-        whalesync_postgres_id: emp.whalesync_postgres_id,
-        full_name: emp.full_name,
-        employee_id: emp.employee_id,
-        department: departmentLookup[emp.department] || 'Unknown',
-        profile_photo: emp.profile_photo,
-        official_email: emp.official_email
-      })) || [];
+      const transformedEmployees = employeesData?.map(emp => {
+        const departmentName = departmentLookup[emp.department] || (emp.department ? `Raw: ${emp.department}` : 'No Department');
+        console.log(`Employee ${emp.full_name}: department field = "${emp.department}", resolved to = "${departmentName}"`);
+        return {
+          whalesync_postgres_id: emp.whalesync_postgres_id,
+          full_name: emp.full_name,
+          employee_id: emp.employee_id,
+          department: departmentName,
+          profile_photo: emp.profile_photo,
+          official_email: emp.official_email
+        };
+      }) || [];
       
       console.log("Real employees:", transformedEmployees);
+      setEmployees(transformedEmployees);
       
       // Fetch attendance data
       const { data: attendanceData, error: attendanceError } = await supabase
@@ -224,7 +327,7 @@ export default function AdminAttendancePage() {
         id: record.whalesync_postgres_id,
         employee_name: record.full_name_from_employee || 'Unknown',
         employee_id: record.employee_id_from_employee || 'Unknown',
-        department: departmentLookup[record.department_name_from_employee] || 'Unknown',
+        department: departmentLookup[record.department_name_from_employee] || (record.department_name_from_employee ? `Raw: ${record.department_name_from_employee}` : 'No Department'),
         date: record.date,
         status: record.status || 'Not Marked',
         time_in: record.time_in ? `${Math.floor(record.time_in)}:${String(Math.round((record.time_in % 1) * 60)).padStart(2, '0')}` : 'N/A',
@@ -583,10 +686,6 @@ export default function AdminAttendancePage() {
     setIsDetailsOpen(true);
   };
 
-  const handleEditRecord = (record: AttendanceRecord) => {
-    // Open a modal or navigate to edit the record
-    alert(`Editing attendance record for ${record.employee_name} on ${record.date}`);
-  };
 
   const handleResolveException = (alertId: string) => {
     setExceptionAlerts(prev => 
@@ -597,6 +696,101 @@ export default function AdminAttendancePage() {
       )
     );
     console.log("Resolved exception:", alertId);
+  };
+
+  const handleEditRecord = (record: AttendanceRecord) => {
+    setEditingRecord(record);
+    setEditForm({
+      status: record.status,
+      timeIn: record.time_in,
+      timeOut: record.time_out,
+      notes: record.notes
+    });
+    setIsEditAttendanceOpen(true);
+  };
+
+  const handleUpdateAttendance = async () => {
+    if (!editingRecord) return;
+
+    try {
+      const { supabase } = await import('@/lib/supabaseClient');
+      
+      const timeInDecimal = parseFloat(editForm.timeIn.replace(':', '.'));
+      const timeOutDecimal = parseFloat(editForm.timeOut.replace(':', '.'));
+      const workingHours = timeOutDecimal - timeInDecimal;
+
+      const { error } = await supabase
+        .from('Attendance')
+        .update({
+          status: editForm.status,
+          time_in: timeInDecimal,
+          time_out: timeOutDecimal,
+          working_hours: workingHours,
+          notes: editForm.notes,
+          punctuality_status: editForm.timeIn <= '09:00' ? 'On Time' : 'Late'
+        })
+        .eq('whalesync_postgres_id', editingRecord.id);
+
+      if (error) throw error;
+
+      toast.success(`Attendance updated for ${editingRecord.employee_name}`);
+      setIsEditAttendanceOpen(false);
+      setEditingRecord(null);
+      
+      // Refresh data
+      loadDashboardData();
+    } catch (error) {
+      console.error("Error updating attendance:", error);
+      toast.error("Failed to update attendance");
+    }
+  };
+
+  const handleManualAttendance = async () => {
+    if (!selectedEmployeeForManual) return;
+
+    try {
+      const { supabase } = await import('@/lib/supabaseClient');
+      
+      const today = new Date().toISOString().split('T')[0];
+      const timeInDecimal = parseFloat(manualAttendanceForm.timeIn.replace(':', '.'));
+      const timeOutDecimal = parseFloat(manualAttendanceForm.timeOut.replace(':', '.'));
+      const workingHours = timeOutDecimal - timeInDecimal;
+
+      const { error } = await supabase
+        .from('Attendance')
+        .insert({
+          employee: selectedEmployeeForManual.whalesync_postgres_id,
+          employee_id_from_employee: selectedEmployeeForManual.employee_id,
+          full_name_from_employee: selectedEmployeeForManual.full_name,
+          date: today,
+          status: manualAttendanceForm.status,
+          time_in: timeInDecimal,
+          time_out: timeOutDecimal,
+          working_hours: workingHours,
+          punctuality_status: manualAttendanceForm.timeIn <= '09:00' ? 'On Time' : 'Late',
+          notes: manualAttendanceForm.notes,
+          date_status: 'Today',
+          day_name_of_date: new Date().toLocaleDateString('en-US', { weekday: 'long' })
+        });
+
+      if (error) throw error;
+
+      toast.success(`Attendance marked for ${selectedEmployeeForManual.full_name}`);
+      setIsManualAttendanceOpen(false);
+      setSelectedEmployeeForManual(null);
+      setManualAttendanceForm({
+        status: 'Present',
+        timeIn: '09:00',
+        timeOut: '17:00',
+        notes: ''
+      });
+      
+      // Refresh data
+      loadDashboardData();
+    } catch (error) {
+      console.error("Error marking manual attendance:", error);
+      toast.error("Failed to mark attendance");
+    }
   };
 
   const handleExportData = () => {
@@ -858,6 +1052,7 @@ export default function AdminAttendancePage() {
       <SidebarInset className="h-screen">
         <div className="flex flex-col h-screen">
           <SiteHeader title="Attendance" />
+          
           
           <div className="flex-1 flex flex-col">
             <div className="p-1 space-y-1 flex-1 flex flex-col min-h-0">
@@ -2192,6 +2387,192 @@ export default function AdminAttendancePage() {
               </Card>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Attendance Dialog */}
+      <Dialog open={isManualAttendanceOpen} onOpenChange={setIsManualAttendanceOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Mark Manual Attendance</DialogTitle>
+            <DialogDescription>
+              Manually mark attendance for an employee
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Employee Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="employee-select">Select Employee</Label>
+              <Select onValueChange={(value) => {
+                const employee = employees.find(emp => emp.whalesync_postgres_id === value);
+                setSelectedEmployeeForManual(employee);
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose an employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees && employees.length > 0 ? employees.map((employee) => (
+                    <SelectItem key={employee.whalesync_postgres_id} value={employee.whalesync_postgres_id}>
+                      {employee.full_name} ({employee.employee_id})
+                    </SelectItem>
+                  )) : (
+                    <SelectItem value="no-employees" disabled>
+                      No employees available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Status Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="status-select">Attendance Status</Label>
+              <Select 
+                value={manualAttendanceForm.status} 
+                onValueChange={(value) => setManualAttendanceForm(prev => ({ ...prev, status: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Present">Present</SelectItem>
+                  <SelectItem value="Absent">Absent</SelectItem>
+                  <SelectItem value="Half Day">Half Day</SelectItem>
+                  <SelectItem value="Late">Late</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Time Inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="time-in">Time In</Label>
+                <Input
+                  id="time-in"
+                  type="time"
+                  value={manualAttendanceForm.timeIn}
+                  onChange={(e) => setManualAttendanceForm(prev => ({ ...prev, timeIn: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time-out">Time Out</Label>
+                <Input
+                  id="time-out"
+                  type="time"
+                  value={manualAttendanceForm.timeOut}
+                  onChange={(e) => setManualAttendanceForm(prev => ({ ...prev, timeOut: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Add any notes about this attendance record..."
+                value={manualAttendanceForm.notes}
+                onChange={(e) => setManualAttendanceForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsManualAttendanceOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleManualAttendance} disabled={!selectedEmployeeForManual}>
+              Mark Attendance
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Attendance Dialog */}
+      <Dialog open={isEditAttendanceOpen} onOpenChange={setIsEditAttendanceOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Attendance Record</DialogTitle>
+            <DialogDescription>
+              Update attendance details for {editingRecord?.employee_name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingRecord && (
+            <div className="space-y-4">
+              {/* Employee Info (Read-only) */}
+              <div className="space-y-2">
+                <Label>Employee</Label>
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="font-medium">{editingRecord.employee_name}</div>
+                  <div className="text-sm text-muted-foreground">{editingRecord.employee_id} • {editingRecord.department}</div>
+                  <div className="text-sm text-muted-foreground">Date: {editingRecord.date}</div>
+                </div>
+              </div>
+
+              {/* Status Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-status-select">Attendance Status</Label>
+                <Select 
+                  value={editForm.status} 
+                  onValueChange={(value) => setEditForm(prev => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Present">Present</SelectItem>
+                    <SelectItem value="Absent">Absent</SelectItem>
+                    <SelectItem value="Half Day">Half Day</SelectItem>
+                    <SelectItem value="Late">Late</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Time Inputs */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-time-in">Time In</Label>
+                  <Input
+                    id="edit-time-in"
+                    type="time"
+                    value={editForm.timeIn}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, timeIn: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-time-out">Time Out</Label>
+                  <Input
+                    id="edit-time-out"
+                    type="time"
+                    value={editForm.timeOut}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, timeOut: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  placeholder="Add any notes about this attendance record..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditAttendanceOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateAttendance}>
+              Update Attendance
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
