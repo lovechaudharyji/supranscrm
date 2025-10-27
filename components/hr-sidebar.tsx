@@ -171,9 +171,19 @@ export function HRSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => {
-                    // Handle logout
-                    window.location.href = '/login';
+                  onClick={async () => {
+                    // Handle logout with local storage clearing
+                    try {
+                      // Clear all local storage data
+                      localStorage.clear();
+                      console.log('Local storage cleared on HR logout');
+                      
+                      // Redirect to login
+                      window.location.href = '/login';
+                    } catch (error) {
+                      console.error('Error during logout:', error);
+                      window.location.href = '/login';
+                    }
                   }}
                 >
                   <LogOut className="mr-2 h-4 w-4" />

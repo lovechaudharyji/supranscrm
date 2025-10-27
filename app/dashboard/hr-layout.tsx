@@ -32,7 +32,12 @@ export default function HRLayout({ children, title }: HRLayoutProps) {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">Access Denied</h1>
           <p className="text-muted-foreground mb-4">You don't have permission to access this page.</p>
-          <Button onClick={() => window.location.href = '/login'}>
+          <Button onClick={() => {
+            // Clear local storage before redirecting
+            localStorage.clear();
+            console.log('Local storage cleared on redirect to login');
+            window.location.href = '/login';
+          }}>
             Go to Login
           </Button>
         </div>

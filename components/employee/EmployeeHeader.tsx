@@ -60,6 +60,33 @@ export function EmployeeHeader({ title, subtitle, onRefresh, onMenuClick, onDesk
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      
+      // Clear user and attendance data from local storage
+      try {
+        // Clear specific attendance and user data
+        localStorage.removeItem('offline-attendance');
+        localStorage.removeItem('attendance-data');
+        localStorage.removeItem('user-data');
+        localStorage.removeItem('employee-data');
+        localStorage.removeItem('demo-mode');
+        
+        // Clear any other app-specific data
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes('attendance') || key.includes('employee') || key.includes('user'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        console.log('User and attendance data cleared from local storage');
+      } catch (clearError) {
+        console.error('Error clearing local storage:', clearError);
+        // Fallback to clear all
+        localStorage.clear();
+      }
+      
       toast.success("Logged out successfully");
       router.push("/login");
     } catch (error) {

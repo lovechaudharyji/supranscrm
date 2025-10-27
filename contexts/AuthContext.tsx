@@ -226,11 +226,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Clear attendance and user data from local storage
+  const clearUserData = () => {
+    try {
+      // Clear specific attendance and user data
+      localStorage.removeItem('offline-attendance');
+      localStorage.removeItem('attendance-data');
+      localStorage.removeItem('user-data');
+      localStorage.removeItem('employee-data');
+      localStorage.removeItem('demo-mode');
+      
+      // Clear any other app-specific data
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('attendance') || key.includes('employee') || key.includes('user'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      console.log('User and attendance data cleared from local storage');
+    } catch (error) {
+      console.error('Error clearing local storage:', error);
+      // Fallback to clear all
+      localStorage.clear();
+    }
+  };
+
   // Sign out function
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
       setUser(null);
+      
+      // Clear user and attendance data from local storage
+      clearUserData();
+      
       toast.success('Signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);

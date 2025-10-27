@@ -54,7 +54,9 @@ export default function EmployeeDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) {
         if (!isDemoMode) {
-          // Redirect to login if not authenticated
+          // Clear local storage and redirect to login if not authenticated
+          localStorage.clear();
+          console.log('Local storage cleared on authentication redirect');
           window.location.href = "/login";
           return;
         }
