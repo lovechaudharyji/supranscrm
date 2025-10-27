@@ -79,7 +79,13 @@ export default function Page() {
   const fetchEmployees = async (): Promise<Employee[]> => {
     const { data, error } = await supabase
       .from("Employee Directory")
-      .select("whalesync_postgres_id, full_name, job_title")
+      .select(`
+        whalesync_postgres_id, 
+        full_name, 
+        job_title,
+        employment_type,
+        department:department(department_name)
+      `)
       .eq('status', 'Active');
     if (error) throw error;
     return data || [];

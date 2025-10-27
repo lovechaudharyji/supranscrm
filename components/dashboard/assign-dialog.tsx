@@ -8,6 +8,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { supabase } from "@/lib/supabaseClient";
 
 export interface Lead {
@@ -26,6 +33,10 @@ export interface Employee {
   whalesync_postgres_id: string;
   full_name: string | null;
   job_title?: string | null;
+  employment_type?: string | null;
+  department?: {
+    department_name?: string | null;
+  } | null;
 }
 
 interface AssignDialogProps {
@@ -46,6 +57,7 @@ export function AssignDialog({
   const [assignQueue, setAssignQueue] = useState<Lead[]>([]);
   const [assignIndex, setAssignIndex] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [filterType, setFilterType] = useState<string>('all');
 
   React.useEffect(() => {
     if (open) {
@@ -94,6 +106,54 @@ export function AssignDialog({
 
   const currentLead = assignQueue[assignIndex];
 
+  // Filter employees based on selected filter type
+  const getFilteredEmployees = () => {
+    if (filterType === 'all') {
+      return employees;
+    }
+    
+    return employees.filter(emp => {
+      const jobTitle = emp.job_title?.toLowerCase() || '';
+      const department = emp.department?.department_name?.toLowerCase() || '';
+      const employmentType = emp.employment_type?.toLowerCase() || '';
+      
+      if (filterType === 'sales') {
+        return jobTitle.includes('sales') || 
+               jobTitle.includes('marketing') || 
+               department.includes('sales') || 
+               department.includes('marketing') ||
+               employmentType.includes('sales');
+      }
+      
+      if (filterType === 'operations') {
+        return jobTitle.includes('operation') || 
+               jobTitle.includes('admin') || 
+               jobTitle.includes('manager') ||
+               department.includes('operation') || 
+               department.includes('admin') ||
+               employmentType.includes('operation');
+      }
+      
+      if (filterType === 'sales_operations') {
+        return (jobTitle.includes('sales') || 
+                jobTitle.includes('marketing') || 
+                department.includes('sales') || 
+                department.includes('marketing') ||
+                employmentType.includes('sales')) ||
+               (jobTitle.includes('operation') || 
+                jobTitle.includes('admin') || 
+                jobTitle.includes('manager') ||
+                department.includes('operation') || 
+                department.includes('admin') ||
+                employmentType.includes('operation'));
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredEmployees = getFilteredEmployees();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -117,23 +177,46 @@ export function AssignDialog({
                 Service: {currentLead?.services || "-"}
               </p>
             </div>
+            
+            {/* Filter Dropdown */}
+            <div className="mt-4">
+              <label className="text-sm font-medium mb-2 block">Filter Assignees:</label>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select filter type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees ({employees.length})</SelectItem>
+                  <SelectItem value="sales">Sales Personnel</SelectItem>
+                  <SelectItem value="operations">Operations Personnel</SelectItem>
+                  <SelectItem value="sales_operations">Sales & Operations ({filteredEmployees.length})</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
-              {employees.map((emp) => (
-                <Button
-                  key={emp.whalesync_postgres_id}
-                  onClick={() =>
-                    assignLead(
-                      currentLead!.whalesync_postgres_id,
-                      emp.whalesync_postgres_id
-                    )
-                  }
-                  disabled={loading}
-                  variant="outline"
-                  size="sm"
-                >
-                  {emp.full_name}
-                </Button>
-              ))}
+              {filteredEmployees.length === 0 ? (
+                <div className="col-span-full text-center py-4 text-muted-foreground">
+                  No employees found for the selected filter.
+                </div>
+              ) : (
+                filteredEmployees.map((emp) => (
+                  <Button
+                    key={emp.whalesync_postgres_id}
+                    onClick={() =>
+                      assignLead(
+                        currentLead!.whalesync_postgres_id,
+                        emp.whalesync_postgres_id
+                      )
+                    }
+                    disabled={loading}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    {emp.full_name}
+                  </Button>
+                ))
+              )}
             </div>
             <div className="flex justify-between mt-4">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
