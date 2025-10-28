@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { LeadsTable } from "@/components/employee/LeadsTable";
-import { LeadSummaryCard } from "@/components/employee/LeadSummaryCard";
+import { LeadSummaryCardWithFilters } from "@/components/employee/LeadSummaryCardWithFilters";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { usePageContext } from "@/contexts/PageContext";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Package, Palette, Building2, Video, Globe } from "lucide-react";
 
 interface Lead {
   whalesync_postgres_id: string;
@@ -28,6 +28,23 @@ export default function FollowUpLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const { setSubtitle, setOnRefresh } = usePageContext();
+  
+  // State for date filters for each card
+  const [selectedDates, setSelectedDates] = useState<{
+    total: Date | null;
+    dropshipping: Date | null;
+    brandDevelopment: Date | null;
+    usaLLC: Date | null;
+    videoCall: Date | null;
+    cantonFair: Date | null;
+  }>({
+    total: null,
+    dropshipping: null,
+    brandDevelopment: null,
+    usaLLC: null,
+    videoCall: null,
+    cantonFair: null,
+  });
 
   useEffect(() => {
     loadLeads();
@@ -80,19 +97,58 @@ export default function FollowUpLeadsPage() {
     return today === followUpDate;
   }).length;
 
-  // Calculate date-based counts
-  const getLeadsInLastDays = (days: number) => {
-    const now = new Date();
-    const daysAgo = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    return leads.filter((lead) => {
-      if (!lead.date_and_time) return false;
-      const leadDate = new Date(lead.date_and_time);
-      return leadDate >= daysAgo;
-    }).length;
+  // Calculate service-based counts with date filtering
+  const getServiceCount = (service: string, selectedDate: Date | null) => {
+    const filteredLeads = leads.filter((lead) => {
+      if (lead.services !== service) return false;
+      if (!selectedDate) return true;
+      
+      // Filter by follow_up_date if available, otherwise by date_and_time
+      const dateToCheck = lead.follow_up_date || lead.date_and_time;
+      if (!dateToCheck) return false;
+      
+      const leadDate = new Date(dateToCheck);
+      const filterDate = new Date(selectedDate);
+      
+      return leadDate.toDateString() === filterDate.toDateString();
+    });
+    
+    return filteredLeads.length;
   };
 
-  const last7DaysCount = getLeadsInLastDays(7);
-  const last30DaysCount = getLeadsInLastDays(30);
+  const getTotalCount = (selectedDate: Date | null) => {
+    const filteredLeads = leads.filter((lead) => {
+      if (!selectedDate) return true;
+      
+      const dateToCheck = lead.follow_up_date || lead.date_and_time;
+      if (!dateToCheck) return false;
+      
+      const leadDate = new Date(dateToCheck);
+      const filterDate = new Date(selectedDate);
+      
+      return leadDate.toDateString() === filterDate.toDateString();
+    });
+    
+    return filteredLeads.length;
+  };
+
+  const serviceCounts = {
+    "Dropshipping": getServiceCount("Dropshipping", selectedDates.dropshipping),
+    "Brand Development": getServiceCount("Brand Development", selectedDates.brandDevelopment),
+    "USA LLC Formation": getServiceCount("USA LLC Formation", selectedDates.usaLLC),
+    "Video Call": getServiceCount("Video Call", selectedDates.videoCall),
+    "Canton Fair": getServiceCount("Canton Fair", selectedDates.cantonFair),
+  };
+
+  const totalCount = getTotalCount(selectedDates.total);
+
+  // Handler functions for date filters
+  const handleDateFilter = (cardType: keyof typeof selectedDates, date: Date | null) => {
+    setSelectedDates(prev => ({
+      ...prev,
+      [cardType]: date
+    }));
+  };
 
   useEffect(() => {
     let subtitle = `${leads.length} lead${leads.length !== 1 ? "s" : ""} requiring follow-up`;
@@ -110,10 +166,15 @@ export default function FollowUpLeadsPage() {
   if (loading) {
     return (
       <div className="h-full flex flex-col">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-4 pt-4 pb-3 flex-shrink-0">
-          <Skeleton className="h-32" />
-          <Skeleton className="h-32" />
-          <Skeleton className="h-32" />
+        <div className="px-4 pt-4 pb-3 flex-shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
         </div>
         <div className="flex-1 px-4 pb-4">
           <Skeleton className="h-full w-full" />
@@ -126,21 +187,48 @@ export default function FollowUpLeadsPage() {
     <div className="h-full flex flex-col">
       {/* Summary Cards - Fixed */}
       <div className="px-4 pt-4 pb-3 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <LeadSummaryCard
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          <LeadSummaryCardWithFilters
             title="Total Follow-up Leads"
-            count={leads.length}
+            count={totalCount}
             icon={CalendarClock}
+            onDateFilter={(date) => handleDateFilter('total', date)}
+            selectedDate={selectedDates.total}
           />
-          <LeadSummaryCard
-            title="Last 7 Days"
-            count={last7DaysCount}
-            icon={CalendarClock}
+          <LeadSummaryCardWithFilters
+            title="Dropshipping"
+            count={serviceCounts["Dropshipping"]}
+            icon={Package}
+            onDateFilter={(date) => handleDateFilter('dropshipping', date)}
+            selectedDate={selectedDates.dropshipping}
           />
-          <LeadSummaryCard
-            title="Last 30 Days"
-            count={last30DaysCount}
-            icon={CalendarClock}
+          <LeadSummaryCardWithFilters
+            title="Brand Development"
+            count={serviceCounts["Brand Development"]}
+            icon={Palette}
+            onDateFilter={(date) => handleDateFilter('brandDevelopment', date)}
+            selectedDate={selectedDates.brandDevelopment}
+          />
+          <LeadSummaryCardWithFilters
+            title="USA LLC Formation"
+            count={serviceCounts["USA LLC Formation"]}
+            icon={Building2}
+            onDateFilter={(date) => handleDateFilter('usaLLC', date)}
+            selectedDate={selectedDates.usaLLC}
+          />
+          <LeadSummaryCardWithFilters
+            title="Video Call"
+            count={serviceCounts["Video Call"]}
+            icon={Video}
+            onDateFilter={(date) => handleDateFilter('videoCall', date)}
+            selectedDate={selectedDates.videoCall}
+          />
+          <LeadSummaryCardWithFilters
+            title="Canton Fair"
+            count={serviceCounts["Canton Fair"]}
+            icon={Globe}
+            onDateFilter={(date) => handleDateFilter('cantonFair', date)}
+            selectedDate={selectedDates.cantonFair}
           />
         </div>
       </div>

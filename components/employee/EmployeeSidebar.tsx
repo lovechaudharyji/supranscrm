@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Home, Users, Phone, ChevronRight, User, Mail, MessageCircle, HardDrive, BookOpen, CheckSquare, FileText, Ticket, Key, Clock } from "lucide-react";
 import { useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const homeNavItems = [
   { title: "Mail", href: "#", icon: Mail, action: "popup", url: "https://mail.google.com" },
@@ -21,6 +22,8 @@ const mainNavItems = [
       { title: "New Leads", href: "/employee/new-leads" },
       { title: "Follow Up Leads", href: "/employee/follow-up-leads" },
       { title: "Not Connected Leads", href: "/employee/not-connected-leads" },
+      { title: "Converted", href: "/employee/converted" },
+      { title: "Lost", href: "/employee/lost" },
     ],
   },
   {
@@ -98,54 +101,71 @@ export function EmployeeSidebar() {
         {/* Home Navigation - Horizontal Icons Only */}
         <div className="mb-1">
           <div className="flex justify-center space-x-2">
-            {homeNavItems.map((item) => {
-              const Icon = item.icon;
-              
-              if (item.external) {
-                return (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
-                    title={item.title}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </a>
-                );
-              }
+            <TooltipProvider>
+              {homeNavItems.map((item) => {
+                const Icon = item.icon;
+                
+                if (item.external) {
+                  return (
+                    <Tooltip key={item.href}>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={item.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <Icon className="h-5 w-5" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-white text-black border-0 shadow-lg rounded-lg px-3 py-2 text-sm font-medium">
+                        <p>{item.title}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                }
 
-              if (item.action === "popup") {
-                return (
-                  <button
-                    key={item.title}
-                    onClick={() => {
-                      window.open(
-                        item.url,
-                        item.title,
-                        "noopener,noreferrer"
-                      );
-                    }}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
-                    title={item.title}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </button>
-                );
-              }
+                if (item.action === "popup") {
+                  return (
+                    <Tooltip key={item.title}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            window.open(
+                              item.url,
+                              item.title,
+                              "noopener,noreferrer"
+                            );
+                          }}
+                          className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <Icon className="h-5 w-5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-white text-black border-0 shadow-lg rounded-lg px-3 py-2 text-sm font-medium">
+                        <p>{item.title}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                }
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
-                  title={item.title}
-                >
-                  <Icon className="h-5 w-5" />
-                </Link>
-              );
-            })}
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href={item.href}
+                        className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Icon className="h-5 w-5" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{item.title}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </TooltipProvider>
           </div>
         </div>
 

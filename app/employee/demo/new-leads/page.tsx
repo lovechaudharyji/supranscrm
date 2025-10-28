@@ -59,7 +59,7 @@ export default function DemoNewLeadsPage() {
         .from("Leads")
         .select("*")
         .eq("assigned_to", empData.whalesync_postgres_id)
-        .in("stage", ["New", "Assigned"])
+        .eq("stage", "New")
         .order("date_and_time", { ascending: false });
 
       if (error) {
@@ -114,7 +114,7 @@ export default function DemoNewLeadsPage() {
           <div>
             <h1 className="text-3xl font-bold mb-2">New Leads</h1>
             <p className="text-muted-foreground">
-              Showing {leads.length} lead{leads.length !== 1 ? "s" : ""} with stage "New" or "Assigned"
+              Showing {leads.length} lead{leads.length !== 1 ? "s" : ""} with stage "New"
             </p>
           </div>
           <Button onClick={loadLeads} variant="outline" size="sm">

@@ -49,7 +49,6 @@ interface Lead {
   source?: string;
   stage?: string;
   date_and_time?: string;
-  follow_up_date?: string;
   call_connected?: string;
   assigned_to?: string;
 }
@@ -196,10 +195,11 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
 
   const getStageColor = (stage?: string) => {
     const s = stage?.toLowerCase() || "";
-    if (s.includes("new") || s.includes("assigned")) return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
-    if (s.includes("follow")) return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+    if (s.includes("new")) return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
     if (s.includes("not connected")) return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
-    if (s.includes("qualified")) return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+    if (s.includes("follow up required")) return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+    if (s.includes("converted")) return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+    if (s.includes("lost")) return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
     return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
   };
 
@@ -273,7 +273,7 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
           `"${(lead.city || "").replace(/"/g, '""')}"`,
           `"${(lead.source || "").replace(/"/g, '""')}"`,
           `"${(lead.stage || "").replace(/"/g, '""')}"`,
-          ...(showFollowUpDate ? [lead.follow_up_date ? new Date(lead.follow_up_date).toLocaleDateString() : ""] : []),
+          ...(showFollowUpDate ? [`"${lead.follow_up_date ? new Date(lead.follow_up_date).toLocaleDateString() : ""}"`] : []),
         ];
         return row.join(",");
       }),
@@ -628,7 +628,7 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
                   </TableRow>
                 ) : (
                   paginatedLeads.map((lead) => {
-                  const dueToday = highlightDueToday && isDueToday(lead.follow_up_date);
+                  const dueToday = false;
                   return (
                     <TableRow
                       key={lead.whalesync_postgres_id}
@@ -707,20 +707,15 @@ export function LeadsTable({ leads, showFollowUpDate = false, highlightDueToday 
                         </TableCell>
                       )}
                       {showFollowUpDate && columnVisibility.followup && (
-                        <TableCell className="px-3 py-3 text-sm whitespace-nowrap">
+                        <TableCell className="px-3 py-3 text-sm">
                           {lead.follow_up_date ? (
-                            <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="text-sm px-2 py-1">
                               {new Date(lead.follow_up_date).toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",
                                 year: "numeric",
                               })}
-                              {dueToday && (
-                                <Badge variant="destructive" className="text-sm ml-1">
-                                  Due
-                                </Badge>
-                              )}
-                            </div>
+                            </Badge>
                           ) : (
                             "-"
                           )}

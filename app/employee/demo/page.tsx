@@ -107,12 +107,12 @@ export default function EmployeeDemoPage() {
 
       // Fetch all stats in parallel using employee UUID
       const [newLeadsResult, followUpResult, notConnectedResult, callsResult] = await Promise.all([
-        // New Leads (Stage = "New" or "Assigned")
+        // New Leads (Stage = "New")
         supabase
           .from("Leads")
           .select("*", { count: "exact", head: true })
           .eq("assigned_to", employeeUUID)
-          .in("stage", ["New", "Assigned"]),
+          .eq("stage", "New"),
         
         // Follow Up Leads
         supabase

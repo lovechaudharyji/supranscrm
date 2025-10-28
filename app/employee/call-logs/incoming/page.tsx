@@ -18,6 +18,9 @@ interface CallLog {
   sentiment?: string;
   call_type?: string;
   employee?: string;
+  leads?: {
+    services?: string;
+  };
 }
 
 export default function IncomingCallsPage() {

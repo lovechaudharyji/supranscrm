@@ -7,10 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { 
-  Phone, Mail, MapPin, Briefcase, Calendar, 
+  Phone, Mail, MapPin, Briefcase, Calendar as CalendarIcon, 
   DollarSign, User, ChevronLeft, Building2, Tag,
-  MessageCircle, Clock
+  MessageCircle, Clock, Edit2, Save, X, CalendarDays
 } from "lucide-react";
 import DispositionSection from "@/components/leadsdetailscomponent/DispositionSection";
 import CallHistory from "@/components/leadsdetailscomponent/CallHistory";
@@ -27,19 +31,16 @@ interface Lead {
   stage: string | null;
   deal_amount: number | null;
   client_budget: string | null;
-  follow_up_date: string | null;
-  expected_closing: string | null;
-  any_other_interests: string | null;
-  call_notes: string | null;
-  lead_tag: string | null;
-  call_remark: string | null;
+  current_business_turnover: string | null;
   date_and_time: string | null;
+  follow_up_day: string | null;
+  follow_up_date: string | null;
+  call_remark: string | null;
   assigned_to?: {
     whalesync_postgres_id: string;
     full_name: string;
     profile_photo: string;
   } | null;
-  calls?: any[];
 }
 
 export default function EmployeeLeadDetailsPage() {
@@ -49,6 +50,9 @@ export default function EmployeeLeadDetailsPage() {
 
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<Partial<Lead>>({});
+  const [followUpDate, setFollowUpDate] = useState<Date | undefined>(undefined);
 
   const fetchLeadDetails = async () => {
     if (!leadId) return;
@@ -58,10 +62,8 @@ export default function EmployeeLeadDetailsPage() {
       .from("Leads")
       .select(`
         whalesync_postgres_id, name, email, mobile, city, services, source, stage,
-        deal_amount, client_budget, follow_up_date, expected_closing,
-        any_other_interests, call_notes, lead_tag, call_remark, date_and_time,
-        assigned_to (whalesync_postgres_id, full_name, profile_photo),
-        calls (whalesync_postgres_id, call_type, call_date, duration, ai_call_summary, sentiment)
+        deal_amount, client_budget, current_business_turnover, date_and_time, follow_up_day, follow_up_date, call_remark, assigned_to,
+        assigned_to (whalesync_postgres_id, full_name, profile_photo)
       `)
       .eq("whalesync_postgres_id", leadId)
       .single();
@@ -95,18 +97,63 @@ export default function EmployeeLeadDetailsPage() {
     return true;
   };
 
+  const handleEdit = () => {
+    if (lead) {
+      setEditData({
+        services: lead.services,
+        source: lead.source,
+        follow_up_day: lead.follow_up_day,
+        follow_up_date: lead.follow_up_date,
+        call_remark: lead.call_remark,
+        deal_amount: lead.deal_amount,
+        client_budget: lead.client_budget,
+        current_business_turnover: lead.current_business_turnover,
+      });
+      // Initialize calendar date if follow_up_date exists
+      if (lead.follow_up_date) {
+        setFollowUpDate(new Date(lead.follow_up_date));
+      } else {
+        setFollowUpDate(undefined);
+      }
+      setIsEditing(true);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!lead) return;
+    
+    // Include the selected follow-up date in the update
+    const updateData = {
+      ...editData,
+      follow_up_date: followUpDate ? followUpDate.toISOString() : null,
+    };
+    
+    const success = await updateLead(updateData);
+    if (success) {
+      setIsEditing(false);
+      setEditData({});
+      setFollowUpDate(undefined);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditData({});
+    setFollowUpDate(undefined);
+  };
+
   const getStageColor = (stage?: string | null) => {
     switch (stage?.toLowerCase()) {
       case "new":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
-      case "connected":
-        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-      case "converted":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
-      case "contact attempted":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300";
+      case "not connected":
+        return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300";
       case "follow up required":
         return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+      case "converted":
+        return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+      case "lost":
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
     }
@@ -184,12 +231,6 @@ export default function EmployeeLeadDetailsPage() {
                       {lead.stage}
                     </Badge>
                   )}
-                  {lead.lead_tag && (
-                    <Badge variant="outline" className="gap-1">
-                      <Tag className="h-3 w-3" />
-                      {lead.lead_tag}
-                    </Badge>
-                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -260,20 +301,70 @@ export default function EmployeeLeadDetailsPage() {
           {/* Contact & Service Info */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Contact & Service Information
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Contact & Service Information
+                </div>
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleCancel}>
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </Button>
+                  </div>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Service</p>
-                  <p className="text-sm font-medium mt-1">{lead.services || "-"}</p>
+                  {isEditing ? (
+                    <Select value={editData.services || ""} onValueChange={(value) => setEditData({...editData, services: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select service" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Brand Development">Brand Development</SelectItem>
+                        <SelectItem value="Canton Fair">Canton Fair</SelectItem>
+                        <SelectItem value="Video Call">Video Call</SelectItem>
+                        <SelectItem value="USA LLC Formation">USA LLC Formation</SelectItem>
+                        <SelectItem value="Dropshipping">Dropshipping</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.services || "-"}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Source</p>
-                  <p className="text-sm font-medium mt-1">{lead.source || "-"}</p>
+                  {isEditing ? (
+                    <Select value={editData.source || ""} onValueChange={(value) => setEditData({...editData, source: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Social Media">Social Media</SelectItem>
+                        <SelectItem value="Referral">Referral</SelectItem>
+                        <SelectItem value="Online Search">Online Search</SelectItem>
+                        <SelectItem value="Advertisement">Advertisement</SelectItem>
+                        <SelectItem value="Cold Call">Cold Call</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.source || "-"}</p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Date Added</p>
@@ -282,10 +373,68 @@ export default function EmployeeLeadDetailsPage() {
                   </p>
                 </div>
                 <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase">Follow Up Timeline</p>
+                  {isEditing ? (
+                    <Select value={editData.follow_up_day || ""} onValueChange={(value) => setEditData({...editData, follow_up_day: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select timeline" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Within 1 week">Within 1 week</SelectItem>
+                        <SelectItem value="Within 1 Month">Within 1 Month</SelectItem>
+                        <SelectItem value="Within 3 Months">Within 3 Months</SelectItem>
+                        <SelectItem value="Within 6 Months">Within 6 Months</SelectItem>
+                        <SelectItem value="Not Sure">Not Sure</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.follow_up_day || "-"}</p>
+                  )}
+                </div>
+                <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Follow Up Date</p>
-                  <p className="text-sm font-medium mt-1">
-                    {lead.follow_up_date ? new Date(lead.follow_up_date).toLocaleDateString() : "-"}
-                  </p>
+                  {isEditing ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="mt-1 w-full justify-start text-left font-normal"
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          {followUpDate ? format(followUpDate, "PPP") : "Pick a date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={followUpDate}
+                          onSelect={setFollowUpDate}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">
+                      {lead.follow_up_date ? new Date(lead.follow_up_date).toLocaleDateString() : "-"}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase">Interest Level</p>
+                  {isEditing ? (
+                    <Select value={editData.call_remark || ""} onValueChange={(value) => setEditData({...editData, call_remark: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select interest level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Very Interested">Very Interested</SelectItem>
+                        <SelectItem value="Moderately Interested">Moderately Interested</SelectItem>
+                        <SelectItem value="Not Interested">Not Interested</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.call_remark || "-"}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -294,70 +443,108 @@ export default function EmployeeLeadDetailsPage() {
           {/* Business Details */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5" />
-                Business Details
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Business Details
+                </div>
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleCancel}>
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </Button>
+                  </div>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Deal Amount</p>
-                  <p className="text-sm font-medium mt-1">
-                    {lead.deal_amount ? `₹${lead.deal_amount.toLocaleString()}` : "-"}
-                  </p>
+                  {isEditing ? (
+                    <Select value={editData.deal_amount?.toString() || ""} onValueChange={(value) => setEditData({...editData, deal_amount: parseFloat(value)})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select amount" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10000">₹10,000</SelectItem>
+                        <SelectItem value="25000">₹25,000</SelectItem>
+                        <SelectItem value="45000">₹45,000</SelectItem>
+                        <SelectItem value="75000">₹75,000</SelectItem>
+                        <SelectItem value="100000">₹1,00,000</SelectItem>
+                        <SelectItem value="150000">₹1,50,000</SelectItem>
+                        <SelectItem value="200000">₹2,00,000</SelectItem>
+                        <SelectItem value="500000">₹5,00,000</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">
+                      {lead.deal_amount ? `₹${lead.deal_amount.toLocaleString()}` : "-"}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase">Client Budget</p>
-                  <p className="text-sm font-medium mt-1">{lead.client_budget || "-"}</p>
+                  {isEditing ? (
+                    <Select value={editData.client_budget || ""} onValueChange={(value) => setEditData({...editData, client_budget: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select budget" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Under ₹10,000">Under ₹10,000</SelectItem>
+                        <SelectItem value="₹10,000 - ₹25,000">₹10,000 - ₹25,000</SelectItem>
+                        <SelectItem value="₹25,000 - ₹50,000">₹25,000 - ₹50,000</SelectItem>
+                        <SelectItem value="₹50,000 - ₹1,00,000">₹50,000 - ₹1,00,000</SelectItem>
+                        <SelectItem value="₹1,00,000 - ₹2,50,000">₹1,00,000 - ₹2,50,000</SelectItem>
+                        <SelectItem value="Above ₹2,50,000">Above ₹2,50,000</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.client_budget || "-"}</p>
+                  )}
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase">Expected Closing</p>
-                  <p className="text-sm font-medium mt-1">
-                    {lead.expected_closing ? new Date(lead.expected_closing).toLocaleDateString() : "-"}
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase">Current Business Turnover</p>
+                  {isEditing ? (
+                    <Select value={editData.current_business_turnover || ""} onValueChange={(value) => setEditData({...editData, current_business_turnover: value})}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select turnover" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Under ₹1 Lakh">Under ₹1 Lakh</SelectItem>
+                        <SelectItem value="₹1 Lakh - ₹5 Lakhs">₹1 Lakh - ₹5 Lakhs</SelectItem>
+                        <SelectItem value="₹5 Lakhs - ₹10 Lakhs">₹5 Lakhs - ₹10 Lakhs</SelectItem>
+                        <SelectItem value="₹10 Lakhs - ₹25 Lakhs">₹10 Lakhs - ₹25 Lakhs</SelectItem>
+                        <SelectItem value="₹25 Lakhs - ₹50 Lakhs">₹25 Lakhs - ₹50 Lakhs</SelectItem>
+                        <SelectItem value="₹50 Lakhs - ₹1 Crore">₹50 Lakhs - ₹1 Crore</SelectItem>
+                        <SelectItem value="Above ₹1 Crore">Above ₹1 Crore</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium mt-1">{lead.current_business_turnover || "-"}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Additional Information */}
-        {(lead.any_other_interests || lead.call_notes) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {lead.any_other_interests && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase">Other Interests</p>
-                  <p className="text-sm mt-1">{lead.any_other_interests}</p>
-                </div>
-              )}
-              {lead.call_notes && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase">Call Notes</p>
-                  <p className="text-sm mt-1">{lead.call_notes}</p>
-                </div>
-              )}
-              {lead.call_remark && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase">Call Remark</p>
-                  <p className="text-sm mt-1">{lead.call_remark}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Call History */}
-        {lead.calls && lead.calls.length > 0 && (
-          <CallHistory calls={lead.calls} />
-        )}
         </div>
       </div>
     </div>
   );
 }
+
+
+
 

@@ -39,6 +39,25 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
     setConnectedRemark("");
   };
 
+  // Convert purchase timeline to follow_up_day
+  const getFollowUpDay = (timeline: string) => {
+    const today = new Date();
+    switch (timeline) {
+      case "Immediate":
+        return "Within 1 week";
+      case "1 Month":
+        return "Within 1 Month";
+      case "3 Months":
+        return "Within 3 Months";
+      case "6 Months":
+        return "Within 6 Months";
+      case "Not Sure":
+        return "Not Sure";
+      default:
+        return null;
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -155,9 +174,7 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
                 <Button
                   onClick={async () => {
                     const ok = await updateLead({
-                      call_remark: disposeRemark || disposeReason,
-                      stage: "Contact Attempted",
-                      lead_tag: "Not Connected",
+                      stage: "Not Connected",
                     });
                     if (ok) {
                       toast.success("Lead updated successfully");
@@ -277,8 +294,8 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
                 <Label htmlFor="stage" className="text-2xl font-bold">Update Lead Stage</Label>
                 <RadioGroup value={stageUpdate} onValueChange={setStageUpdate} className="flex flex-wrap gap-4">
                   {[
-                    "New", "Assigned", "Contact Attempted", "Connected", 
-                    "Qualified", "Converted", "Closed – Lost"
+                    "New", "Not Connected", "Follow Up Required", 
+                    "Converted", "Lost"
                   ].map((stage) => (
                     <div key={stage} className="flex items-center space-x-2">
                       <RadioGroupItem value={stage} id={stage} />
@@ -336,11 +353,12 @@ export default function DispositionSection({ lead, updateLead, refreshLead }: an
               ) : (
                 <Button
                   onClick={async () => {
+                    const followUpDay = getFollowUpDay(purchaseTimeline);
                     const ok = await updateLead({
-                      stage: stageUpdate || "Connected",
+                      stage: stageUpdate || "Follow Up Required",
                       source: discovery || lead.source || null,
-                      call_remark: connectedRemark || interest || null,
-                      lead_tag: selectedTag || null,
+                      follow_up_day: followUpDay,
+                      call_remark: interest || null,
                     });
                     if (ok) {
                       toast.success("Lead updated successfully");

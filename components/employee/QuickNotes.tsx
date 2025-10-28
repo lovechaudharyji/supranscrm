@@ -37,7 +37,13 @@ export function QuickNotes() {
   const [savedNotes, setSavedNotes] = useState<Note[]>([]);
   const [currentNote, setCurrentNote] = useState<Note | null>(null);
   const [activeTab, setActiveTab] = useState("editor");
+  const [mounted, setMounted] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const noteIdCounter = useRef(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Load all saved notes from localStorage when panel opens
@@ -54,6 +60,12 @@ export function QuickNotes() {
         // Validate that it's an array
         if (Array.isArray(notes)) {
           setSavedNotes(notes);
+          // Initialize counter based on existing notes
+          const maxId = notes.reduce((max, note) => {
+            const match = note.id.match(/note-(\d+)/);
+            return match ? Math.max(max, parseInt(match[1])) : max;
+          }, 0);
+          noteIdCounter.current = maxId;
         } else {
           // Old data format, clear it
           console.log("Clearing old notes format");
@@ -109,7 +121,7 @@ export function QuickNotes() {
     const note: Note = currentNote
       ? { ...currentNote, title: noteTitle, content, updatedAt: new Date().toISOString() }
       : {
-          id: Date.now().toString(),
+          id: `note-${++noteIdCounter.current}`,
           title: noteTitle,
           content,
           createdAt: new Date().toISOString(),
@@ -182,9 +194,9 @@ export function QuickNotes() {
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" suppressHydrationWarning>
           <StickyNote className="h-5 w-5" />
-          {savedNotes.length > 0 && (
+          {mounted && savedNotes.length > 0 && (
             <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center font-bold">
               {savedNotes.length}
             </span>

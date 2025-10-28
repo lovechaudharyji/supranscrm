@@ -7,7 +7,7 @@ import { LeadSummaryCardWithFilters } from "@/components/employee/LeadSummaryCar
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { usePageContext } from "@/contexts/PageContext";
-import { PhoneOff, Package, Palette, Building2, Video, Globe } from "lucide-react";
+import { XCircle, Package, Palette, Building2, Video, Globe } from "lucide-react";
 
 interface Lead {
   whalesync_postgres_id: string;
@@ -24,7 +24,7 @@ interface Lead {
   assigned_to?: string;
 }
 
-export default function NotConnectedLeadsPage() {
+export default function LostLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const { setSubtitle, setOnRefresh } = usePageContext();
@@ -49,15 +49,6 @@ export default function NotConnectedLeadsPage() {
   useEffect(() => {
     loadLeads();
   }, []);
-
-  useEffect(() => {
-    setSubtitle(`${leads.length} lead${leads.length !== 1 ? "s" : ""} awaiting connection`);
-  }, [leads.length, setSubtitle]);
-
-  useEffect(() => {
-    setOnRefresh(() => loadLeads);
-    return () => setOnRefresh(undefined);
-  }, [setOnRefresh]);
 
   const loadLeads = async () => {
     setLoading(true);
@@ -86,7 +77,7 @@ export default function NotConnectedLeadsPage() {
         .from("Leads")
         .select("*")
         .eq("assigned_to", employeeData.whalesync_postgres_id)
-        .eq("stage", "Not Connected")
+        .eq("stage", "Lost")
         .order("date_and_time", { ascending: false });
 
       if (error) throw error;
@@ -159,6 +150,19 @@ export default function NotConnectedLeadsPage() {
     }));
   };
 
+  useEffect(() => {
+    let subtitle = `${leads.length} lost lead${leads.length !== 1 ? "s" : ""}`;
+    if (dueTodayCount > 0) {
+      subtitle += ` • ${dueTodayCount} due today`;
+    }
+    setSubtitle(subtitle);
+  }, [leads.length, dueTodayCount, setSubtitle]);
+
+  useEffect(() => {
+    setOnRefresh(() => loadLeads);
+    return () => setOnRefresh(undefined);
+  }, [setOnRefresh]);
+
   if (loading) {
     return (
       <div className="h-full flex flex-col">
@@ -185,9 +189,9 @@ export default function NotConnectedLeadsPage() {
       <div className="px-4 pt-4 pb-3 flex-shrink-0">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <LeadSummaryCardWithFilters
-            title="Total Not Connected"
+            title="Total Lost Leads"
             count={totalCount}
-            icon={PhoneOff}
+            icon={XCircle}
             onDateFilter={(date) => handleDateFilter('total', date)}
             selectedDate={selectedDates.total}
           />
@@ -232,10 +236,9 @@ export default function NotConnectedLeadsPage() {
       {/* Table Area - Fixed height with internal scrolling */}
       <div className="flex-1 px-4 pb-4 min-h-0">
         <div className="h-full">
-          <LeadsTable leads={leads} />
+          <LeadsTable leads={leads} showFollowUpDate={true} highlightDueToday={true} />
         </div>
       </div>
     </div>
   );
 }
-
